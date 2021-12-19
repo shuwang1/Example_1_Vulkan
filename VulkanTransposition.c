@@ -1,6 +1,8 @@
 ﻿#ifdef __cplusplus
 extern "C" {
 #endif
+
+
 #include <memory.h>
 #include <string.h>
 #include <stdio.h>
@@ -14,6 +16,7 @@ extern "C" {
 #else
 	const VkBool32 enableValidationLayers = 1;
 #endif
+
 typedef struct {
 	VkInstance instance;//a connection between the application and the Vulkan library 
 	VkPhysicalDevice physicalDevice;//a handle for the graphics card used in the application
@@ -27,6 +30,7 @@ typedef struct {
 	VkFence fence;//a fence used to synchronize dispatches
 	uint32_t device_id;//an id of a device, reported by Vulkan device list
 } VkGPU;//an example structure containing Vulkan primitives
+
 typedef struct {
 	uint32_t localSize[3];
 	uint32_t inputStride[3];
@@ -35,6 +39,7 @@ typedef struct {
 typedef struct {
 	uint32_t pushID;//an example structure on how to pass small amount of data to the shader right before dispatch
 } VkAppPushConstantsLayout;
+
 typedef struct {
 	//system size for transposition
 	uint32_t size[3];
@@ -53,6 +58,7 @@ typedef struct {
 	VkDeviceSize inputBufferSize;//the size of buffer (in bytes)
 	VkBuffer* inputBuffer;//pointer to the buffer object
 	VkDeviceMemory* inputBufferDeviceMemory;//pointer to the memory object, corresponding to the buffer
+
 	//output buffer
 	VkDeviceSize outputBufferSize;
 	VkBuffer* outputBuffer;
@@ -85,6 +91,9 @@ uint32_t* VkFFTReadShader(uint32_t* length, const char* filename) {
 	length[0] = filesizepadded;
 	return (uint32_t*)str;
 }
+
+
+
 VkResult CreateDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
 	//pointer to the function, as it is not part of the core. Function creates debugging messenger
 	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkGPU->instance, "vkCreateDebugUtilsMessengerEXT");
@@ -95,6 +104,8 @@ VkResult CreateDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkDebugUtilsMessengerC
 		return VK_ERROR_EXTENSION_NOT_PRESENT;
 	}
 }
+
+
 void DestroyDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkAllocationCallbacks* pAllocator) {
 	//pointer to the function, as it is not part of the core. Function destroys debugging messenger
 	PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkGPU->instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -102,24 +113,45 @@ void DestroyDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkAllocationCallbacks* pA
 		func(vkGPU->instance, vkGPU->debugMessenger, pAllocator);
 	}
 }
+
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
 	printf("validation layer: %s\n", pCallbackData->pMessage);
 	return VK_FALSE;
 }
-VkResult setupDebugMessenger(VkGPU* vkGPU) {
+
+
+VkResult
+setup_DebugUtilsMessenger(VkInstance instance,
+                     VkDebugUtilsMessengerEXT *debugUtilsMessenger)
+{
 	//function that sets up the debugging messenger 
 	if (enableValidationLayers == 0) return VK_SUCCESS;
 
-	VkDebugUtilsMessengerCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	createInfo.pfnUserCallback = debugCallback;
+        VkDebugUtilsMessengerCreateInfoEXT
+        debugUtilsMessengerCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            (const void*) NULL,
+            (VkDebugUtilsMessengerCreateFlagsEXT) 0,
+            (VkDebugUtilsMessageSeverityFlagsEXT) VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            (VkDebugUtilsMessageTypeFlagsEXT) VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+            (PFN_vkDebugUtilsMessengerCallbackEXT) debugCallback,
+            (void*) NULL };
+ 
+	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
 
-	if (CreateDebugUtilsMessengerEXT(vkGPU, &createInfo, NULL, &vkGPU->debugMessenger) != VK_SUCCESS) {
-		return VK_ERROR_INITIALIZATION_FAILED;
+	if (func != NULL) {
+	        if (func(instance, &debugUtilsMessengerCreateInfo, NULL, debugUtilsMessenger) != VK_SUCCESS) {
+	        	return VK_ERROR_INITIALIZATION_FAILED;
+	        }
 	}
+	else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+
 	return VK_SUCCESS;
 }
+
+
 VkResult checkValidationLayerSupport() {
 	//check if validation layers are supported when an instance is created
 	uint32_t layerCount;
@@ -137,7 +169,11 @@ VkResult checkValidationLayerSupport() {
 	free(availableLayers);
 	return VK_ERROR_LAYER_NOT_PRESENT;
 }
-VkResult createInstance(VkGPU* vkGPU) {
+
+
+VkResult
+create_Instance(VkInstance *instance) 
+{
 	//create instance - a connection between the application and the Vulkan library 
 	VkResult res = VK_SUCCESS;
 	//check if validation layers are supported
@@ -146,71 +182,84 @@ VkResult createInstance(VkGPU* vkGPU) {
 		if (res != VK_SUCCESS) return res;
 	}
 	//sample app information
-	VkApplicationInfo applicationInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
-	applicationInfo.pApplicationName = "VulkanTest";
-	applicationInfo.applicationVersion = 1.0;
-	applicationInfo.pEngineName = "VulkanTest";
-	applicationInfo.engineVersion = 1.0;
-	applicationInfo.apiVersion = VK_API_VERSION_1_0;
+	VkApplicationInfo applicationInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                              (const void*) NULL,
+                              (const char*) "Vulkan Transposition Test",
+                              (uint32_t) 1.0,
+                              (const char*) "VulkanTest",
+                              (uint32_t) 1.0,
+                              (uint32_t) VK_API_VERSION_1_0 };
 
-	VkInstanceCreateInfo createInfo = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
-	createInfo.flags = 0;
-	createInfo.pApplicationInfo = &applicationInfo;
+        VkDebugUtilsMessengerCreateInfoEXT
+        debugUtilsMessengerCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            (const void*) NULL,
+            (VkDebugUtilsMessengerCreateFlagsEXT) 0,
+            (VkDebugUtilsMessageSeverityFlagsEXT) VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            (VkDebugUtilsMessageTypeFlagsEXT) VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+            (PFN_vkDebugUtilsMessengerCallbackEXT) debugCallback,
+            (void*) NULL };
+
+	VkInstanceCreateInfo instanceCreateInfo = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                                 (const void*) NULL,
+                                 (VkInstanceCreateFlags) 0,
+                                 (const VkApplicationInfo*) &applicationInfo,
+                                 (uint32_t) 0,
+                                 (const char* const*) NULL,
+                                 (uint32_t) 0,
+                                 (const char* const*) NULL };
+
 	//specify, whether debugging utils are required
 	if (enableValidationLayers == 1) {
 		const char* const extensions = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
-		createInfo.enabledExtensionCount = 1;
-		createInfo.ppEnabledExtensionNames = &extensions;
+		instanceCreateInfo.enabledExtensionCount = 1;
+		instanceCreateInfo.ppEnabledExtensionNames = &extensions;
 	}
-	else {
-		createInfo.enabledExtensionCount = 0;
-		createInfo.ppEnabledExtensionNames = NULL;
-	}
-	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+	
+
 	if (enableValidationLayers == 1) {
 		//query for the validation layer support in the instance
-		createInfo.enabledLayerCount = 1;
+		instanceCreateInfo.enabledLayerCount = 1;
 		const char* validationLayers = "VK_LAYER_KHRONOS_validation";
-		createInfo.ppEnabledLayerNames = &validationLayers;
-		debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		debugCreateInfo.pfnUserCallback = debugCallback;
-		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
-	}
-	else {
-		createInfo.enabledLayerCount = 0;
-		createInfo.pNext = NULL;
-	}
-	//create instance
-	res = vkCreateInstance(&createInfo, NULL, &vkGPU->instance);
-	if (res != VK_SUCCESS) return res;
-	
-	return res;
-}
-VkResult findPhysicalDevice(VkGPU* vkGPU) {
-	//check if there are GPUs that support Vulkan and select one
-	VkResult res = VK_SUCCESS;
-	uint32_t deviceCount;
-	res = vkEnumeratePhysicalDevices(vkGPU->instance, &deviceCount, NULL);
-	if (res != VK_SUCCESS) return res;
-	if (deviceCount == 0) {
-		return VK_ERROR_DEVICE_LOST;
+		instanceCreateInfo.ppEnabledLayerNames = &validationLayers;
+		instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugUtilsMessengerCreateInfo;
 	}
 
-	VkPhysicalDevice* devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * deviceCount);
-	res = vkEnumeratePhysicalDevices(vkGPU->instance, &deviceCount, devices);
+	//create instance
+	return vkCreateInstance(&instanceCreateInfo, NULL, instance);
+}
+
+
+VkResult
+find_PhysicalDevice(VkInstance instance,
+                    uint32_t deviceId,
+                    VkPhysicalDevice* physicalDevice)
+{
+	//check if there are GPUs that support Vulkan and select one
+	VkResult res = VK_SUCCESS;
+	uint32_t deviceCount=0xFFFFFFFF;
+	res = vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
 	if (res != VK_SUCCESS) return res;
-	vkGPU->physicalDevice = devices[vkGPU->device_id];
+	if (deviceCount == 0)  return VK_ERROR_DEVICE_LOST;
+
+	VkPhysicalDevice* devices = (VkPhysicalDevice*) malloc(sizeof(VkPhysicalDevice) * deviceCount);
+	res = vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
+	if (res != VK_SUCCESS) return res;
+	*physicalDevice = devices[deviceId];
 	free(devices);
 	return VK_SUCCESS;
 }
-VkResult getComputeQueueFamilyIndex(VkGPU* vkGPU) {
+
+VkResult
+get_Compute_QueueFamilyIndex(VkPhysicalDevice physicalDevice,
+                             uint32_t *queueFamilyIndex) 
+{
 	//find a queue family for a selected GPU, select the first available for use
 	uint32_t queueFamilyCount;
-	vkGetPhysicalDeviceQueueFamilyProperties(vkGPU->physicalDevice, &queueFamilyCount, NULL);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
 
 	VkQueueFamilyProperties* queueFamilies = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(vkGPU->physicalDevice, &queueFamilyCount, queueFamilies);
+
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
 	uint32_t i = 0;
 	for (; i < queueFamilyCount; i++) {
 		VkQueueFamilyProperties props = queueFamilies[i];
@@ -223,50 +272,50 @@ VkResult getComputeQueueFamilyIndex(VkGPU* vkGPU) {
 	if (i == queueFamilyCount) {
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
-	vkGPU->queueFamilyIndex = i;
+	*queueFamilyIndex = i;
 	return VK_SUCCESS;
 }
-VkResult createDevice(VkGPU* vkGPU) {
+
+VkResult 
+create_logicalDevice(VkPhysicalDevice physicalDevice,
+                     uint32_t *queueFamilyIndex, 
+                     VkDevice *device,
+                     VkQueue  *queue)
+{
 	//create logical device representation
 	VkResult res = VK_SUCCESS;
-	VkDeviceQueueCreateInfo queueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
-	res = getComputeQueueFamilyIndex(vkGPU);
+	res = get_Compute_QueueFamilyIndex(physicalDevice, queueFamilyIndex);
 	if (res != VK_SUCCESS) return res;
-	queueCreateInfo.queueFamilyIndex = vkGPU->queueFamilyIndex;
-	queueCreateInfo.queueCount = 1;
 	float queuePriorities = 1.0;
-	queueCreateInfo.pQueuePriorities = &queuePriorities;
-	VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
-	VkPhysicalDeviceFeatures deviceFeatures = { 0 };
-	deviceFeatures.shaderFloat64 = VK_TRUE;//this enables double precision support in shaders 
-	deviceCreateInfo.enabledExtensionCount = 0;
-	deviceCreateInfo.ppEnabledExtensionNames = NULL;
-	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
-	deviceCreateInfo.queueCreateInfoCount = 1;
-	deviceCreateInfo.pEnabledFeatures = NULL;
-	deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-	res = vkCreateDevice(vkGPU->physicalDevice, &deviceCreateInfo, NULL, &vkGPU->device);
+	VkDeviceQueueCreateInfo
+            deviceQueueCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                (const void*) NULL,
+                (VkDeviceQueueCreateFlags) 0,
+                (uint32_t) *queueFamilyIndex,
+                (uint32_t) 1,
+                (const float*) &queuePriorities };
+
+	VkPhysicalDeviceFeatures physicalDeviceFeatures = { 0 };
+	physicalDeviceFeatures.shaderFloat64 = VK_TRUE;//this enables double precision support in shaders 
+
+	VkDeviceCreateInfo
+            deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+                (const void*) NULL,
+                (VkDeviceCreateFlags) 0,
+                (uint32_t) 1,
+                (const VkDeviceQueueCreateInfo*) &deviceQueueCreateInfo,
+                (uint32_t) 0,
+                (const char* const*) NULL,
+                (uint32_t) 0,
+                (const char* const*) NULL,
+                (const VkPhysicalDeviceFeatures*) &physicalDeviceFeatures};
+
+	res = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, device);
 	if (res != VK_SUCCESS) return res;
-	vkGetDeviceQueue(vkGPU->device, vkGPU->queueFamilyIndex, 0, &vkGPU->queue);
+	vkGetDeviceQueue(*device, *queueFamilyIndex, 0, queue);
 	return res;
 }
-VkResult createFence(VkGPU* vkGPU) {
-	//create fence for synchronization 
-	VkResult res = VK_SUCCESS;
-	VkFenceCreateInfo fenceCreateInfo = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-	fenceCreateInfo.flags = 0;
-	res = vkCreateFence(vkGPU->device, &fenceCreateInfo, NULL, &vkGPU->fence);
-	return res;
-}
-VkResult createCommandPool(VkGPU* vkGPU) {
-	//create a place, command buffer memory is allocated from
-	VkResult res = VK_SUCCESS;
-	VkCommandPoolCreateInfo commandPoolCreateInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
-	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	commandPoolCreateInfo.queueFamilyIndex = vkGPU->queueFamilyIndex;
-	res = vkCreateCommandPool(vkGPU->device, &commandPoolCreateInfo, NULL, &vkGPU->commandPool);
-	return res;
-}
+
 VkResult createShaderModule(VkGPU* vkGPU, VkShaderModule* shaderModule, uint32_t shaderID) {
 	//create shader module, using the SPIR-V bytecode
 	VkResult res = VK_SUCCESS;
@@ -295,6 +344,8 @@ VkResult createShaderModule(VkGPU* vkGPU, VkShaderModule* shaderModule, uint32_t
 	free(code);
 	return res;
 }
+
+
 VkResult createApp(VkGPU* vkGPU, VkApplication* app, uint32_t shaderID) {
 	//create an application interface to Vulkan. This function binds the shader to the compute pipeline, so it can be used as a part of the command buffer later
 	VkResult res = VK_SUCCESS;
@@ -477,7 +528,10 @@ void deleteApp(VkGPU* vkGPU, VkApplication* app) {
 	vkDestroyPipelineLayout(vkGPU->device, app->pipelineLayout, NULL);
 	vkDestroyPipeline(vkGPU->device, app->pipeline, NULL);
 }
-VkResult findMemoryType(VkGPU* vkGPU, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties, uint32_t* memoryTypeIndex) {
+
+VkResult
+find_MemoryType(VkGPU* vkGPU, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties, uint32_t* memoryTypeIndex)
+{
 	//find memory with specified properties
 	VkPhysicalDeviceMemoryProperties memoryProperties = { 0 };
 
@@ -492,37 +546,62 @@ VkResult findMemoryType(VkGPU* vkGPU, uint32_t memoryTypeBits, VkMemoryPropertyF
 	}
 	return VK_ERROR_INITIALIZATION_FAILED;
 }
-VkResult allocateFFTBuffer(VkGPU* vkGPU, VkBuffer* buffer, VkDeviceMemory* deviceMemory, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags propertyFlags, VkDeviceSize size) {
+
+
+VkResult
+allocate_Buffer_DeviceMemory(VkGPU* vkGPU,
+                             VkDevice device, 
+                             VkBuffer* buffer,
+                             VkDeviceMemory* deviceMemory,
+                             VkBufferUsageFlags usageFlags,
+                             VkMemoryPropertyFlags propertyFlags,
+                             VkDeviceSize size)
+{
 	//allocate the buffer used by the GPU with specified properties
 	VkResult res = VK_SUCCESS;
 	uint32_t queueFamilyIndices;
-	VkBufferCreateInfo bufferCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	bufferCreateInfo.queueFamilyIndexCount = 1;
-	bufferCreateInfo.pQueueFamilyIndices = &queueFamilyIndices;
-	bufferCreateInfo.size = size;
-	bufferCreateInfo.usage = usageFlags;
-	res = vkCreateBuffer(vkGPU->device, &bufferCreateInfo, NULL, buffer);
+	VkBufferCreateInfo bufferCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                               (const void*) NULL,
+                               (VkBufferCreateFlags) 0,
+                               (VkDeviceSize) size,
+                               (VkBufferUsageFlags) usageFlags,
+                               (VkSharingMode)  VK_SHARING_MODE_EXCLUSIVE,
+                               (uint32_t) 1,
+                               (const uint32_t*) queueFamilyIndices };
+
+	res = vkCreateBuffer(device, &bufferCreateInfo, NULL, buffer);
 	if (res != VK_SUCCESS) return res;
 	VkMemoryRequirements memoryRequirements = { 0 };
-	vkGetBufferMemoryRequirements(vkGPU->device, buffer[0], &memoryRequirements);
+	vkGetBufferMemoryRequirements(device, buffer[0], &memoryRequirements);
+
 	VkMemoryAllocateInfo memoryAllocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 	memoryAllocateInfo.allocationSize = memoryRequirements.size;
-	res = findMemoryType(vkGPU, memoryRequirements.memoryTypeBits, propertyFlags, &memoryAllocateInfo.memoryTypeIndex);
+
+	res = find_MemoryType(vkGPU, memoryRequirements.memoryTypeBits, propertyFlags, &memoryAllocateInfo.memoryTypeIndex);
+
+
 	if (res != VK_SUCCESS) return res;
-	res = vkAllocateMemory(vkGPU->device, &memoryAllocateInfo, NULL, deviceMemory);
+	res = vkAllocateMemory(device, &memoryAllocateInfo, NULL, deviceMemory);
 	if (res != VK_SUCCESS) return res;
-	res = vkBindBufferMemory(vkGPU->device, buffer[0], deviceMemory[0], 0);
+	res = vkBindBufferMemory(device, buffer[0], deviceMemory[0], 0);
 	if (res != VK_SUCCESS) return res;
 	return res;
 }
+
+
+
 VkResult transferDataFromCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSize bufferSize) {
 	//a function that transfers data from the CPU to the GPU using staging buffer, because the GPU memory is not host-coherent
 	VkResult res = VK_SUCCESS;
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
-	res = allocateFFTBuffer(vkGPU, &stagingBuffer, &stagingBufferMemory, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBufferSize);
+	res = allocate_Buffer_DeviceMemory(vkGPU,
+                                           &stagingBuffer,
+                                           &stagingBufferMemory,
+                                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                           stagingBufferSize);
 	if (res != VK_SUCCESS) return res;
 	void* data;
 	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &data);
@@ -567,7 +646,12 @@ VkResult transferDataToCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSi
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
-	res = allocateFFTBuffer(vkGPU, &stagingBuffer, &stagingBufferMemory, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBufferSize);
+	res = allocate_Buffer_DeviceMemory(vkGPU,
+                                           &stagingBuffer,
+                                           &stagingBufferMemory,
+                                           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                           stagingBufferSize);
 	if (res != VK_SUCCESS) return res;
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
@@ -606,81 +690,113 @@ VkResult transferDataToCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSi
 	return res;
 }
 
-VkResult devices_list() {
-	//this function creates an instance and prints the list of available devices
-	VkResult res = VK_SUCCESS;
-	VkInstance local_instance = {0};
-	VkInstanceCreateInfo createInfo = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
-	createInfo.flags = 0;
-	createInfo.pApplicationInfo = NULL;
-	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-	createInfo.enabledLayerCount = 0;
-	createInfo.enabledExtensionCount = 0;
-	createInfo.pNext = NULL;
-	res = vkCreateInstance(&createInfo, NULL, &local_instance);
-	if (res != VK_SUCCESS) return res;
+VkResult
+devices_list() {
+    //this function creates an instance and prints the list of available devices
+    VkResult res = VK_SUCCESS;
+    VkInstance local_instance = {0};
 
-	uint32_t deviceCount;
-	res = vkEnumeratePhysicalDevices(local_instance, &deviceCount, NULL);
-	if (res != VK_SUCCESS) return res;
+    VkInstanceCreateInfo createInfo = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+    createInfo.flags = 0;
+    createInfo.pApplicationInfo = NULL;
+    createInfo.enabledLayerCount = 0;
+    createInfo.enabledExtensionCount = 0;
+    createInfo.pNext = NULL;
+    res = vkCreateInstance(&createInfo, NULL, &local_instance);
+    if (res != VK_SUCCESS) return res;
 
-	VkPhysicalDevice* devices=(VkPhysicalDevice *) malloc(sizeof(VkPhysicalDevice)*deviceCount);
-	res = vkEnumeratePhysicalDevices(local_instance, &deviceCount, devices);
-	if (res != VK_SUCCESS) return res;
-	for (uint32_t i = 0; i < deviceCount; i++) {
-		VkPhysicalDeviceProperties device_properties;
-		vkGetPhysicalDeviceProperties(devices[i], &device_properties);
-		printf("Device id: %d name: %s API:%d.%d.%d\n", i, device_properties.deviceName, (device_properties.apiVersion >> 22), ((device_properties.apiVersion >> 12) & 0x3ff), (device_properties.apiVersion & 0xfff));
-	}
-	free(devices);
-	vkDestroyInstance(local_instance, NULL);
-	return res;
+    VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+   
+   	uint32_t deviceCount;
+   	res = vkEnumeratePhysicalDevices(local_instance, &deviceCount, NULL);
+   	if (res != VK_SUCCESS) return res;
+   
+   	VkPhysicalDevice* devices=(VkPhysicalDevice *) malloc(sizeof(VkPhysicalDevice)*deviceCount);
+   	res = vkEnumeratePhysicalDevices(local_instance, &deviceCount, devices);
+   	if (res != VK_SUCCESS) return res;
+   	for (uint32_t i = 0; i < deviceCount; i++) {
+   		VkPhysicalDeviceProperties device_properties;
+   		vkGetPhysicalDeviceProperties(devices[i], &device_properties);
+   		printf("Device id: %d name: %s API:%d.%d.%d\n", i, device_properties.deviceName, (device_properties.apiVersion >> 22), ((device_properties.apiVersion >> 12) & 0x3ff), (device_properties.apiVersion & 0xfff));
+   	}
+   	free(devices);
+   	vkDestroyInstance(local_instance, NULL);
+   	return res;
 }
 
-VkResult VulkanTest(uint32_t deviceID, uint32_t coalescedMemory, uint32_t size)
+
+
+
+VkResult
+VulkanTest(uint32_t deviceID,
+           uint32_t coalescedMemory,
+           uint32_t size)
 {
 	VkGPU vkGPU = { 0 };
 	vkGPU.device_id = deviceID;
 	VkResult res = VK_SUCCESS;
+
+
 	//create instance - a connection between the application and the Vulkan library 
-	res = createInstance(&vkGPU);
+	res = create_Instance( &vkGPU.instance );
 	if (res != VK_SUCCESS) {
 		printf("Instance creation failed, error code: %d\n", res);
 		return res;
 	}
+
 	//set up the debugging messenger 
-	res = setupDebugMessenger(&vkGPU);
+	res = setup_DebugUtilsMessenger(vkGPU.instance, &vkGPU.debugMessenger);
 	if (res != VK_SUCCESS) {
-		printf("Debug messenger creation failed, error code: %d\n", res);
+		printf("Debug utils messenger creation failed, error code: %d\n", res);
 		return res;
 	}
+
 	//check if there are GPUs that support Vulkan and select one
-	res = findPhysicalDevice(&vkGPU);
+	res = find_PhysicalDevice(vkGPU.instance, deviceID, &vkGPU.physicalDevice);
 	if (res != VK_SUCCESS) {
 		printf("Physical device not found, error code: %d\n", res);
 		return res;
 	}
+
 	//create logical device representation
-	res = createDevice(&vkGPU);
+	res = create_logicalDevice(vkGPU.physicalDevice, &vkGPU.queueFamilyIndex, &vkGPU.device, &vkGPU.queue);
 	if (res != VK_SUCCESS) {
 		printf("Device creation failed, error code: %d\n", res);
 		return res;
 	}
+
+
 	//create fence for synchronization 
-	res = createFence(&vkGPU);
+	VkFenceCreateInfo fenceCreateInfo = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                              (const void*) NULL,
+                              (VkFenceCreateFlags) 0 };
+	res = vkCreateFence(vkGPU.device, &fenceCreateInfo, NULL, &vkGPU.fence);
 	if (res != VK_SUCCESS) {
 		printf("Fence creation failed, error code: %d\n", res);
 		return res;
 	}
+
+
 	//create a place, command buffer memory is allocated from
-	res = createCommandPool(&vkGPU);
+	VkCommandPoolCreateInfo commandPoolCreateInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                                    (const void*) NULL,
+                                    (VkCommandPoolCreateFlags) VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+                                    (uint32_t) vkGPU.queueFamilyIndex };
+	res = vkCreateCommandPool(vkGPU.device, &commandPoolCreateInfo, NULL, &vkGPU.commandPool);
 	if (res != VK_SUCCESS) {
 		printf("Fence creation failed, error code: %d\n", res);
 		return res;
 	}
+
+
+
+
 	//get device properties and memory properties, if needed
 	vkGetPhysicalDeviceProperties(vkGPU.physicalDevice, &vkGPU.physicalDeviceProperties);
 	vkGetPhysicalDeviceMemoryProperties(vkGPU.physicalDevice, &vkGPU.physicalDeviceMemoryProperties);
+
+
+
 	//create app template and set the system size, the amount of memory to coalesce
 	VkApplication app = { 0 };
 	app.size[0] = size;
@@ -705,6 +821,10 @@ VkResult VulkanTest(uint32_t deviceID, uint32_t coalescedMemory, uint32_t size)
 	}
 	else
 		app.coalescedMemory = coalescedMemory;
+
+
+
+
 	//allocate input and output buffers
 	VkDeviceSize inputBufferSize=sizeof(float)* app.size[0] * app.size[1] * app.size[2];
 	VkBuffer inputBuffer = { 0 };
@@ -714,16 +834,29 @@ VkResult VulkanTest(uint32_t deviceID, uint32_t coalescedMemory, uint32_t size)
 	VkBuffer outputBuffer = { 0 };
 	VkDeviceMemory outputBufferDeviceMemory = { 0 };
 
-	res = allocateFFTBuffer(&vkGPU, &inputBuffer, &inputBufferDeviceMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, inputBufferSize);
+	res = allocate_Buffer_DeviceMemory(&vkGPU,
+                                           &inputBuffer,
+                                           &inputBufferDeviceMemory,
+                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
+                                           inputBufferSize);
 	if (res != VK_SUCCESS) {
 		printf("Input buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
-	res = allocateFFTBuffer(&vkGPU, &outputBuffer, &outputBufferDeviceMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, outputBufferSize);
+	res = allocate_Buffer_DeviceMemory(&vkGPU,
+                                           &outputBuffer,
+                                           &outputBufferDeviceMemory,
+                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
+                                           outputBufferSize);
 	if (res != VK_SUCCESS) {
 		printf("Output buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
+
+
+
 	//specify pointers in the app with the previously allocated buffers data
 	app.inputBufferSize = inputBufferSize;
 	app.inputBuffer = &inputBuffer;
@@ -819,6 +952,11 @@ VkResult VulkanTest(uint32_t deviceID, uint32_t coalescedMemory, uint32_t size)
 	vkDestroyInstance(vkGPU.instance, NULL);
 	return res;
 }
+
+
+
+
+
 int findFlag(char** argv, int num, char* flag) {
 	//search for the flag in argv
 	for (int i = 0; i < num; i++) {
@@ -826,6 +964,8 @@ int findFlag(char** argv, int num, char* flag) {
 	}
 	return 0;
 }
+
+
 int main(int argc, char* argv[])
 {
 	uint32_t device_id = 0;//device id used in application
@@ -905,6 +1045,8 @@ int main(int argc, char* argv[])
 	VkResult res = VulkanTest(device_id, coalescedMemory, size);
 	return res;
 }
+
+
 #ifdef __cplusplus
 }
 #endif
