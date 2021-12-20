@@ -186,7 +186,7 @@ create_Instance(VkInstance *instance)
                               (const void*) NULL,
                               (const char*) "Vulkan Transposition Test",
                               (uint32_t) 1.0,
-                              (const char*) "VulkanTest",
+                              (const char*) "VulkanTransposition",
                               (uint32_t) 1.0,
                               (uint32_t) VK_API_VERSION_1_0 };
 
@@ -279,7 +279,7 @@ get_Compute_QueueFamilyIndex(VkPhysicalDevice physicalDevice,
 VkResult 
 create_logicalDevice(VkPhysicalDevice physicalDevice,
                      uint32_t *queueFamilyIndex, 
-                     VkDevice *device,
+                     VkDevice *logicalDevice,
                      VkQueue  *queue)
 {
 	//create logical device representation
@@ -310,9 +310,9 @@ create_logicalDevice(VkPhysicalDevice physicalDevice,
                 (const char* const*) NULL,
                 (const VkPhysicalDeviceFeatures*) &physicalDeviceFeatures};
 
-	res = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, device);
+	res = vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, logicalDevice);
 	if (res != VK_SUCCESS) return res;
-	vkGetDeviceQueue(*device, *queueFamilyIndex, 0, queue);
+	vkGetDeviceQueue(*logicalDevice, *queueFamilyIndex, 0, queue);
 	return res;
 }
 
@@ -521,6 +521,8 @@ VkResult runApp(VkGPU* vkGPU, VkApplication* app, uint32_t batch, double* time) 
 	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
 	return res;
 }
+
+
 void deleteApp(VkGPU* vkGPU, VkApplication* app) {
 	//destroy previously allocated resources of the application
 	vkDestroyDescriptorPool(vkGPU->device, app->descriptorPool, NULL);
@@ -529,16 +531,20 @@ void deleteApp(VkGPU* vkGPU, VkApplication* app) {
 	vkDestroyPipeline(vkGPU->device, app->pipeline, NULL);
 }
 
+
 VkResult
-find_MemoryType(VkGPU* vkGPU, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties, uint32_t* memoryTypeIndex)
+find_MemoryType(VkPhysicalDevice physicalDevice,
+                uint32_t memoryTypeBits,
+                VkMemoryPropertyFlags memoryPropertyFlags,
+                uint32_t* memoryTypeIndex)
 {
 	//find memory with specified properties
-	VkPhysicalDeviceMemoryProperties memoryProperties = { 0 };
+	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties = { 0 };
 
-	vkGetPhysicalDeviceMemoryProperties(vkGPU->physicalDevice, &memoryProperties);
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &physicalDeviceMemoryProperties);
 
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-		if ((memoryTypeBits & (1 << i)) && ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+	for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; ++i) {
+		if ((memoryTypeBits & (1 << i)) && ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags))
 		{
 			memoryTypeIndex[0] = i;
 			return VK_SUCCESS;
@@ -549,13 +555,14 @@ find_MemoryType(VkGPU* vkGPU, uint32_t memoryTypeBits, VkMemoryPropertyFlags pro
 
 
 VkResult
-allocate_Buffer_DeviceMemory(VkGPU* vkGPU,
-                             VkDevice device, 
-                             VkBuffer* buffer,
-                             VkDeviceMemory* deviceMemory,
-                             VkBufferUsageFlags usageFlags,
-                             VkMemoryPropertyFlags propertyFlags,
-                             VkDeviceSize size)
+allocate_Buffer_DeviceMemory(VkPhysicalDevice physicalDevice,
+                             VkDevice logicalDevice, 
+                             VkBufferUsageFlags bufferUsageFlags,
+                             VkPhysicalDeviceMemoryProperties *physicalDeviceMemoryProperties,
+                             VkMemoryPropertyFlags memoryPropertyFlags,
+                             VkDeviceSize size,
+                             VkBuffer *buffer,
+                             VkDeviceMemory* deviceMemory )
 {
 	//allocate the buffer used by the GPU with specified properties
 	VkResult res = VK_SUCCESS;
@@ -564,94 +571,147 @@ allocate_Buffer_DeviceMemory(VkGPU* vkGPU,
                                (const void*) NULL,
                                (VkBufferCreateFlags) 0,
                                (VkDeviceSize) size,
-                               (VkBufferUsageFlags) usageFlags,
+                               (VkBufferUsageFlags) bufferUsageFlags,
                                (VkSharingMode)  VK_SHARING_MODE_EXCLUSIVE,
                                (uint32_t) 1,
-                               (const uint32_t*) queueFamilyIndices };
+                               (const uint32_t*) &queueFamilyIndices };
 
-	res = vkCreateBuffer(device, &bufferCreateInfo, NULL, buffer);
+	res = vkCreateBuffer(logicalDevice, &bufferCreateInfo, NULL, buffer);
 	if (res != VK_SUCCESS) return res;
+
 	VkMemoryRequirements memoryRequirements = { 0 };
-	vkGetBufferMemoryRequirements(device, buffer[0], &memoryRequirements);
+	vkGetBufferMemoryRequirements(logicalDevice, buffer[0], &memoryRequirements);
 
-	VkMemoryAllocateInfo memoryAllocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-	memoryAllocateInfo.allocationSize = memoryRequirements.size;
+	//find memory with specified properties
+        uint32_t memoryTypeIndex = 0xFFFFFFFF;
+        if (NULL == physicalDeviceMemoryProperties) vkGetPhysicalDeviceMemoryProperties(physicalDevice, physicalDeviceMemoryProperties);
 
-	res = find_MemoryType(vkGPU, memoryRequirements.memoryTypeBits, propertyFlags, &memoryAllocateInfo.memoryTypeIndex);
+	for (uint32_t i = 0; i < physicalDeviceMemoryProperties->memoryTypeCount; ++i) {
+		if (( memoryRequirements.memoryTypeBits & (1 << i)) && ((physicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags))
+		{
+			memoryTypeIndex = i;
+                        break;
+		}
+	}
+	if(0xFFFFFFFF ==  memoryTypeIndex) return VK_ERROR_INITIALIZATION_FAILED;
 
+	VkMemoryAllocateInfo memoryAllocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 (const void*) NULL,
+                                 (VkDeviceSize) memoryRequirements.size,
+                                 (uint32_t) memoryTypeIndex };
 
+	res = vkAllocateMemory(logicalDevice, &memoryAllocateInfo, NULL, deviceMemory);
 	if (res != VK_SUCCESS) return res;
-	res = vkAllocateMemory(device, &memoryAllocateInfo, NULL, deviceMemory);
-	if (res != VK_SUCCESS) return res;
-	res = vkBindBufferMemory(device, buffer[0], deviceMemory[0], 0);
-	if (res != VK_SUCCESS) return res;
+
+	res = vkBindBufferMemory(logicalDevice, buffer[0], deviceMemory[0], 0);
 	return res;
 }
 
 
 
-VkResult transferDataFromCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSize bufferSize) {
-	//a function that transfers data from the CPU to the GPU using staging buffer, because the GPU memory is not host-coherent
+VkResult
+transferDataFromCPU(VkPhysicalDevice physicalDevice,
+                    VkDevice logicalDevice,
+                    void* data,
+                    VkPhysicalDeviceMemoryProperties *physicalDeviceMemoryProperties,
+                    VkCommandPool commandPool,
+                    VkQueue  queue,
+                    VkFence  *fence,
+                    VkBuffer *buffer,
+                    VkDeviceSize bufferSize)
+{
 	VkResult res = VK_SUCCESS;
+
+	//a function that transfers data from the CPU to the GPU using staging buffer,
+        //because the GPU memory is not host-coherent
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
-	res = allocate_Buffer_DeviceMemory(vkGPU,
-                                           &stagingBuffer,
-                                           &stagingBufferMemory,
+	res = allocate_Buffer_DeviceMemory(physicalDevice,
+                                           logicalDevice,
                                            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                           physicalDeviceMemoryProperties,
                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                           stagingBufferSize);
+                                           stagingBufferSize,
+                                           &stagingBuffer,
+                                           &stagingBufferMemory );
 	if (res != VK_SUCCESS) return res;
-	void* data;
-	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &data);
+
+	void* stagingData;
+	res = vkMapMemory(logicalDevice, stagingBufferMemory, 0, stagingBufferSize, 0, &stagingData);
 	if (res != VK_SUCCESS) return res;
-	memcpy(data, arr, stagingBufferSize);
-	vkUnmapMemory(vkGPU->device, stagingBufferMemory);
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
-	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferAllocateInfo.commandBufferCount = 1;
+	memcpy(stagingData, data, stagingBufferSize);
+	vkUnmapMemory(logicalDevice, stagingBufferMemory);
+
+
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                        (const void*) NULL,
+                                        (VkCommandPool) commandPool,
+                                        (VkCommandBufferLevel) VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        (uint32_t) 1 };
 	VkCommandBuffer commandBuffer = { 0 };
-	res = vkAllocateCommandBuffers(vkGPU->device, &commandBufferAllocateInfo, &commandBuffer);
+	res = vkAllocateCommandBuffers(logicalDevice, &commandBufferAllocateInfo, &commandBuffer);
 	if (res != VK_SUCCESS) return res;
-	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                     (const void*) NULL,
+                                     (VkCommandBufferUsageFlags) VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                                     (const VkCommandBufferInheritanceInfo*) NULL };
 	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
 	if (res != VK_SUCCESS) return res;
-	VkBufferCopy copyRegion = { 0 };
-	copyRegion.srcOffset = 0;
-	copyRegion.dstOffset = 0;
-	copyRegion.size = stagingBufferSize;
+
+	VkBufferCopy copyRegion = { 0, 0, stagingBufferSize };
 	vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer[0], 1, &copyRegion);
 	res = vkEndCommandBuffer(commandBuffer);
 	if (res != VK_SUCCESS) return res;
-	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-	res = vkQueueSubmit(vkGPU->queue, 1, &submitInfo, vkGPU->fence);
+
+
+	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                         (const void*) NULL,
+                         (uint32_t) 0,
+                         (const VkSemaphore*) NULL,
+                         (const VkPipelineStageFlags*) NULL,
+                         (uint32_t) 1,
+                         (const VkCommandBuffer*) &commandBuffer,
+                         (uint32_t ) 0,
+                         (const VkSemaphore*) NULL };
+
+	res = vkQueueSubmit(queue, 1, &submitInfo, *fence);
 	if (res != VK_SUCCESS) return res;
-	res = vkWaitForFences(vkGPU->device, 1, &vkGPU->fence, VK_TRUE, 100000000000);
+
+
+	res = vkWaitForFences(logicalDevice, 1, fence, VK_TRUE, 100000000000);
 	if (res != VK_SUCCESS) return res;
-	res = vkResetFences(vkGPU->device, 1, &vkGPU->fence);
+
+	res = vkResetFences(logicalDevice, 1, fence);
 	if (res != VK_SUCCESS) return res;
-	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
-	vkDestroyBuffer(vkGPU->device, stagingBuffer, NULL);
-	vkFreeMemory(vkGPU->device, stagingBufferMemory, NULL);
+
+	vkFreeCommandBuffers(logicalDevice, commandPool, 1, &commandBuffer);
+	vkDestroyBuffer(logicalDevice, stagingBuffer, NULL);
+	vkFreeMemory(logicalDevice, stagingBufferMemory, NULL);
 	return res;
 }
-VkResult transferDataToCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSize bufferSize) {
+
+
+VkResult
+transferDataToCPU(VkGPU* vkGPU,
+                  void* data,
+                  VkBuffer* buffer,
+                  VkDeviceSize bufferSize) 
+{
 	//a function that transfers data from the GPU to the CPU using staging buffer, because the GPU memory is not host-coherent
 	VkResult res = VK_SUCCESS;
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
-	res = allocate_Buffer_DeviceMemory(vkGPU,
-                                           &stagingBuffer,
-                                           &stagingBufferMemory,
+	res = allocate_Buffer_DeviceMemory(vkGPU->physicalDevice,
+                                           vkGPU->device,
                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                           &vkGPU->physicalDeviceMemoryProperties,
                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                           stagingBufferSize);
+                                           stagingBufferSize,
+                                           &stagingBuffer,
+                                           &stagingBufferMemory );
 	if (res != VK_SUCCESS) return res;
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
@@ -680,10 +740,10 @@ VkResult transferDataToCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSi
 	res = vkResetFences(vkGPU->device, 1, &vkGPU->fence);
 	if (res != VK_SUCCESS) return res;
 	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
-	void* data;
-	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &data);
+	void* stagingData;
+	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &stagingData);
 	if (res != VK_SUCCESS) return res;
-	memcpy(arr, data, stagingBufferSize);
+	memcpy(data, stagingData, stagingBufferSize);
 	vkUnmapMemory(vkGPU->device, stagingBufferMemory);
 	vkDestroyBuffer(vkGPU->device, stagingBuffer, NULL);
 	vkFreeMemory(vkGPU->device, stagingBufferMemory, NULL);
@@ -691,7 +751,7 @@ VkResult transferDataToCPU(VkGPU* vkGPU, void* arr, VkBuffer* buffer, VkDeviceSi
 }
 
 VkResult
-devices_list() {
+list_PhysicalDevice() {
     //this function creates an instance and prints the list of available devices
     VkResult res = VK_SUCCESS;
     VkInstance local_instance = {0};
@@ -728,7 +788,7 @@ devices_list() {
 
 
 VkResult
-VulkanTest(uint32_t deviceID,
+Example_VulkanTransposition(uint32_t deviceID,
            uint32_t coalescedMemory,
            uint32_t size)
 {
@@ -819,8 +879,9 @@ VulkanTest(uint32_t deviceID,
 			break;
 		}
 	}
-	else
+	else{
 		app.coalescedMemory = coalescedMemory;
+        }
 
 
 
@@ -834,27 +895,61 @@ VulkanTest(uint32_t deviceID,
 	VkBuffer outputBuffer = { 0 };
 	VkDeviceMemory outputBufferDeviceMemory = { 0 };
 
-	res = allocate_Buffer_DeviceMemory(&vkGPU,
-                                           &inputBuffer,
-                                           &inputBufferDeviceMemory,
+
+//
+//The most optimal memory has the VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT flag and is usually not accessible by the CPU on dedicated graphics cards. 
+//The memory type that allows us to access it from the CPU may not be the most optimal memory type for the graphics card itself to read from.
+//
+	res = allocate_Buffer_DeviceMemory(vkGPU.physicalDevice,
+                                           vkGPU.device,
                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
-                                           inputBufferSize);
+                                           &vkGPU.physicalDeviceMemoryProperties,
+                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, //device local memory
+                                           inputBufferSize,
+                                           &inputBuffer,
+                                           &inputBufferDeviceMemory );
 	if (res != VK_SUCCESS) {
 		printf("Input buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
-	res = allocate_Buffer_DeviceMemory(&vkGPU,
-                                           &outputBuffer,
-                                           &outputBufferDeviceMemory,
+
+
+
+	res = allocate_Buffer_DeviceMemory(vkGPU.physicalDevice,
+                                           vkGPU.device,
                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
-                                           outputBufferSize);
+                                           &vkGPU.physicalDeviceMemoryProperties,
+                                           VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, //device local memory
+                                           outputBufferSize,
+                                           &outputBuffer,
+                                           &outputBufferDeviceMemory );
 	if (res != VK_SUCCESS) {
 		printf("Output buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
 
+	//allocate input data on the CPU
+	float* buffer_input = (float*)malloc(inputBufferSize);
+	for (uint32_t k = 0; k < app.size[2]; k++) {
+		for (uint32_t j = 0; j < app.size[1]; j++) {
+			for (uint32_t i = 0; i < app.size[0]; i++) {
+				buffer_input[ (i + j * app.size[0] + k * (app.size[0]) * app.size[1])] = (i + j * app.size[0] + k * (app.size[0]) * app.size[1]);
+			}
+		}
+	}
+
+	//transfer data to GPU staging buffer and thereafter
+        //sync the staging buffer with GPU local memory
+	transferDataFromCPU(vkGPU.physicalDevice,
+                            vkGPU.device,
+                            buffer_input,
+                            &vkGPU.physicalDeviceMemoryProperties,
+                            vkGPU.commandPool,
+                            vkGPU.queue,
+                            &vkGPU.fence,
+                            &inputBuffer,
+                            inputBufferSize);
+	free(buffer_input);
 
 
 	//specify pointers in the app with the previously allocated buffers data
@@ -885,19 +980,7 @@ VulkanTest(uint32_t deviceID,
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
 	}
-	//allocate input data on the CPU
-	float* buffer_input = (float*)malloc(inputBufferSize);
 
-	for (uint32_t k = 0; k < app.size[2]; k++) {
-		for (uint32_t j = 0; j < app.size[1]; j++) {
-			for (uint32_t i = 0; i < app.size[0]; i++) {
-				buffer_input[ (i + j * app.size[0] + k * (app.size[0]) * app.size[1])] = (i + j * app.size[0] + k * (app.size[0]) * app.size[1]);
-			}
-		}
-	}
-	//transfer data to the GPU
-	transferDataFromCPU(&vkGPU,buffer_input, &inputBuffer, inputBufferSize);
-	free(buffer_input);
 	double time_no_bank_conflicts = 0;
 	double time_bank_conflicts = 0;
 	double time_bandwidth = 0;
@@ -934,7 +1017,23 @@ VulkanTest(uint32_t deviceID,
 		return res;
 	}
 	//print results
-	printf("Transpose time with no bank conflicts: %.3f ms\nTranspose time with bank conflicts: %.3f ms\nTransfer time: %.3f ms\nCoalesced Memory: %d bytes\nSystem size: %dx%d\nBuffer size: %d KB\nBandwidth: %d GB/s\nTranfer time/total transpose time: %0.3f%%\n", time_no_bank_conflicts, time_bank_conflicts, time_bandwidth, app.coalescedMemory, app.size[0], app.size[1],inputBufferSize / 1024, (int)(2*1000*inputBufferSize / 1024.0 / 1024.0 / 1024.0 /time_bandwidth), time_bandwidth/ time_no_bank_conflicts *100);
+	printf("Transpose time with no bank conflicts: %.3f ms\nTranspose time with bank conflicts: %.3f ms\nTransfer time: %.3f ms\nCoalesced Memory: %d bytes\nSystem size: %dx%d\nBuffer size: %d KB\nBandwidth: %d GB/s\nTranfer time/total transpose time: %0.3f%%\n",
+            time_no_bank_conflicts,
+            time_bank_conflicts,
+            time_bandwidth,
+            app.coalescedMemory,
+            app.size[0],
+            app.size[1],
+            (int) inputBufferSize / 1024,
+            (int)(2*1000*inputBufferSize / 1024.0 / 1024.0 / 1024.0 /time_bandwidth),
+            time_bandwidth/ time_no_bank_conflicts *100);
+
+
+
+
+
+
+
 	
 	//free resources
 	free(buffer_output);
@@ -987,7 +1086,7 @@ int main(int argc, char* argv[])
 	if (findFlag(argv, argc, "-devices")>0)
 	{
 		//print device list
-		devices_list();
+		list_PhysicalDevice();
 		return 0;
 	}
 	if (findFlag(argv, argc, "-d")>0)
@@ -1042,7 +1141,7 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 	}
-	VkResult res = VulkanTest(device_id, coalescedMemory, size);
+	VkResult res = Example_VulkanTransposition(device_id, coalescedMemory, size);
 	return res;
 }
 

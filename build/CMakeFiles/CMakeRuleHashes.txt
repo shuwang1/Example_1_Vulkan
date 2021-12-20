@@ -1,0 +1,5 @@
+# Hashes of file build rules.
+c6dddaa6774d451aff8707f922055230 ../shaders/transfer.spv
+4445b57a6c8a7fb127f03554bda7268b ../shaders/transposition_bank_conflicts.spv
+0d480ebdeb4449058b9f84a020abe186 ../shaders/transposition_no_bank_conflicts.spv
+a60498ec24add093a503859313b71567 CMakeFiles/compile_shaders
