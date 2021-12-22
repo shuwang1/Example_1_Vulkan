@@ -296,7 +296,7 @@ create_logicalDevice(VkPhysicalDevice physicalDevice,
                 (const float*) &queuePriorities };
 
 	VkPhysicalDeviceFeatures physicalDeviceFeatures = { 0 };
-	physicalDeviceFeatures.shaderFloat64 = VK_TRUE;//this enables double precision support in shaders 
+	//physicalDeviceFeatures.shaderFloat64 = VK_TRUE;//this enables double precision support in shaders 
 
 	VkDeviceCreateInfo
             deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -610,15 +610,15 @@ allocate_Buffer_DeviceMemory(VkPhysicalDevice physicalDevice,
 
 
 VkResult
-transferDataFromCPU(VkPhysicalDevice physicalDevice,
-                    VkDevice logicalDevice,
-                    void* data,
-                    VkPhysicalDeviceMemoryProperties *physicalDeviceMemoryProperties,
-                    VkCommandPool commandPool,
-                    VkQueue  queue,
-                    VkFence  *fence,
-                    VkBuffer *buffer,
-                    VkDeviceSize bufferSize)
+upload_Data(VkPhysicalDevice physicalDevice,
+            VkDevice logicalDevice,
+            void* data,
+            VkPhysicalDeviceMemoryProperties *physicalDeviceMemoryProperties,
+            VkCommandPool commandPool,
+            VkQueue  queue,
+            VkFence  *fence,
+            VkBuffer *computeBuffer,
+            VkDeviceSize bufferSize)
 {
 	VkResult res = VK_SUCCESS;
 
@@ -661,7 +661,7 @@ transferDataFromCPU(VkPhysicalDevice physicalDevice,
 	if (res != VK_SUCCESS) return res;
 
 	VkBufferCopy copyRegion = { 0, 0, stagingBufferSize };
-	vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer[0], 1, &copyRegion);
+	vkCmdCopyBuffer(commandBuffer, stagingBuffer, computeBuffer[0], 1, &copyRegion);
 	res = vkEndCommandBuffer(commandBuffer);
 	if (res != VK_SUCCESS) return res;
 
@@ -694,13 +694,14 @@ transferDataFromCPU(VkPhysicalDevice physicalDevice,
 
 
 VkResult
-transferDataToCPU(VkGPU* vkGPU,
-                  void* data,
-                  VkBuffer* buffer,
-                  VkDeviceSize bufferSize) 
+download_Data(VkGPU* vkGPU,
+              void* data,
+              VkBuffer* buffer,
+              VkDeviceSize bufferSize) 
 {
-	//a function that transfers data from the GPU to the CPU using staging buffer, because the GPU memory is not host-coherent
 	VkResult res = VK_SUCCESS;
+
+	//a function that transfers data from the GPU to the CPU using staging buffer, because the GPU memory is not host-coherent
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
@@ -713,7 +714,13 @@ transferDataToCPU(VkGPU* vkGPU,
                                            &stagingBuffer,
                                            &stagingBufferMemory );
 	if (res != VK_SUCCESS) return res;
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+
+
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                        (const void*) NULL, 
+
+
+                                          };
 	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
 	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferAllocateInfo.commandBufferCount = 1;
@@ -740,11 +747,15 @@ transferDataToCPU(VkGPU* vkGPU,
 	res = vkResetFences(vkGPU->device, 1, &vkGPU->fence);
 	if (res != VK_SUCCESS) return res;
 	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
+
+
 	void* stagingData;
 	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &stagingData);
 	if (res != VK_SUCCESS) return res;
 	memcpy(data, stagingData, stagingBufferSize);
 	vkUnmapMemory(vkGPU->device, stagingBufferMemory);
+
+
 	vkDestroyBuffer(vkGPU->device, stagingBuffer, NULL);
 	vkFreeMemory(vkGPU->device, stagingBufferMemory, NULL);
 	return res;
@@ -821,7 +832,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 	//create logical device representation
 	res = create_logicalDevice(vkGPU.physicalDevice, &vkGPU.queueFamilyIndex, &vkGPU.device, &vkGPU.queue);
 	if (res != VK_SUCCESS) {
-		printf("Device creation failed, error code: %d\n", res);
+		printf("logical Device creation failed, error code: %d\n", res);
 		return res;
 	}
 
@@ -847,7 +858,6 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Fence creation failed, error code: %d\n", res);
 		return res;
 	}
-
 
 
 
@@ -940,15 +950,15 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 	//transfer data to GPU staging buffer and thereafter
         //sync the staging buffer with GPU local memory
-	transferDataFromCPU(vkGPU.physicalDevice,
-                            vkGPU.device,
-                            buffer_input,
-                            &vkGPU.physicalDeviceMemoryProperties,
-                            vkGPU.commandPool,
-                            vkGPU.queue,
-                            &vkGPU.fence,
-                            &inputBuffer,
-                            inputBufferSize);
+	upload_Data(vkGPU.physicalDevice,
+                    vkGPU.device,
+                    buffer_input,
+                    &vkGPU.physicalDeviceMemoryProperties,
+                    vkGPU.commandPool,
+                    vkGPU.queue,
+                    &vkGPU.fence,
+                    &inputBuffer,
+                    inputBufferSize);
 	free(buffer_input);
 
 
@@ -962,6 +972,8 @@ Example_VulkanTransposition(uint32_t deviceID,
 	//copy app for bank conflicted shared memory sample and bandwidth sample
 	VkApplication app_bank_conflicts = app;
 	VkApplication app_bandwidth = app;
+
+
 	//create transposition app with no bank conflicts from transposition shader
 	res = createApp(&vkGPU, &app, 0);
 	if (res != VK_SUCCESS) {
@@ -984,6 +996,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 	double time_no_bank_conflicts = 0;
 	double time_bank_conflicts = 0;
 	double time_bandwidth = 0;
+
 	//perform transposition with no bank conflicts on the input buffer and store it in the output 1000 times
 	res = runApp(&vkGPU, &app, 1000, &time_no_bank_conflicts);
 	if (res != VK_SUCCESS) {
@@ -993,7 +1006,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 	float* buffer_output = (float*)malloc(outputBufferSize);
 
 	//Transfer data from GPU using staging buffer, if needed
-	transferDataToCPU(&vkGPU, buffer_output, &outputBuffer, outputBufferSize);
+	download_Data(&vkGPU, buffer_output, &outputBuffer, outputBufferSize);
 	//Print data, if needed.
 	/*for (uint32_t k = 0; k < app.size[2]; k++) {
 		for (uint32_t j = 0; j < app.size[1]; j++) {
@@ -1010,6 +1023,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application 1 run failed, error code: %d\n", res);
 		return res;
 	}
+
 	//transfer data from the input buffer to the output buffer 1000 times
 	res = runApp(&vkGPU, &app_bandwidth, 1000, &time_bandwidth);
 	if (res != VK_SUCCESS) {
@@ -1070,77 +1084,9 @@ int main(int argc, char* argv[])
 	uint32_t device_id = 0;//device id used in application
 	uint32_t coalescedMemory = 0;//how much memory is coalesced
 	uint32_t size = 2048;
-	
-	//sample CLI
-	if (findFlag(argv, argc, "-h")>0)
-	{
-		//print help
-		printf("Vulkan Compute transposition sample v1.0.0 (31-10-2020). Author: Dmitrii Tolmachev\n");
-		printf("	-h: print help\n");
-		printf("	-devices: print the list of available GPU devices\n");
-		printf("	-d X: select GPU device (default 0)\n");
-		printf("	-c X: specify how much memory is coalesced per transfer: 4-128 bytes (default Nvidia: 32, Intel/AMD: 64, default: 64)\n");
-		printf("	-size X: specify square array size: should be >= coalescedMemory (default 2048)\n");
-		return 0;
-	}
-	if (findFlag(argv, argc, "-devices")>0)
-	{
-		//print device list
-		list_PhysicalDevice();
-		return 0;
-	}
-	if (findFlag(argv, argc, "-d")>0)
-	{
-		//select device_id
-		char* value = argv[findFlag(argv, argc, "-d") + 1];
-		if (findFlag(argv, argc, "-d") + 1 != argc) {
-			int res = sscanf(value, "%d", &device_id);
-			if (res == 0) {
-				printf("No device is selected with -d flag\n");
-				return 1;
-			}
-		}
-		else {
-			printf("No device is selected with -d flag\n");
-			return 1;
-		}
-	}
-	if (findFlag(argv, argc, "-c") > 0)
-	{
-		//select how much memory is coalesced
-		char* value = argv[findFlag(argv, argc, "-c") + 1];
-		if (findFlag(argv, argc, "-c") + 1 != argc) {
-			int res = sscanf(value, "%d", &coalescedMemory);
-			if (res == 0) {
-				printf("No coalescedMemory constant is selected with -c flag\n");
-				return 1;
-			}
-		}
-		else {
-			printf("No coalescedMemory constant is selected with -c flag\n");
-			return 1;
-		}
-	}
-	if (findFlag(argv, argc, "-size") > 0)
-	{
-		//select the square array size for transposition 
-		char* value = argv[findFlag(argv, argc, "-size") + 1];
-		if (findFlag(argv, argc, "-size") + 1 != argc) {
-			int res = sscanf(value, "%d", &size);
-			if (size < coalescedMemory) {
-				printf("Array size should be bigger than coalescedMemory constant\n");
-				return 1;
-			}
-			if (res == 0) {
-				printf("No array size is selected with -size flag\n");
-				return 1;
-			}
-		}
-		else {
-			printf("No array size is selected with -size flag\n");
-			return 1;
-		}
-	}
+
+        list_PhysicalDevice();
+
 	VkResult res = Example_VulkanTransposition(device_id, coalescedMemory, size);
 	return res;
 }
