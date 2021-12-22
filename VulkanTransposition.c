@@ -788,7 +788,7 @@ list_PhysicalDevice() {
    	for (uint32_t i = 0; i < deviceCount; i++) {
    		VkPhysicalDeviceProperties device_properties;
    		vkGetPhysicalDeviceProperties(devices[i], &device_properties);
-   		printf("Device id: %d name: %s API:%d.%d.%d\n", i, device_properties.deviceName, (device_properties.apiVersion >> 22), ((device_properties.apiVersion >> 12) & 0x3ff), (device_properties.apiVersion & 0xfff));
+   		printf("\nDevice id: %d name: %s API:%d.%d.%d\n\n", i, device_properties.deviceName, (device_properties.apiVersion >> 22), ((device_properties.apiVersion >> 12) & 0x3ff), (device_properties.apiVersion & 0xfff));
    	}
    	free(devices);
    	vkDestroyInstance(local_instance, NULL);
@@ -828,6 +828,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Physical device not found, error code: %d\n", res);
 		return res;
 	}
+        printf("\nPhysical device is found, return code: %d\n", res);
 
 	//create logical device representation
 	res = create_logicalDevice(vkGPU.physicalDevice, &vkGPU.queueFamilyIndex, &vkGPU.device, &vkGPU.queue);
@@ -835,7 +836,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("logical Device creation failed, error code: %d\n", res);
 		return res;
 	}
-
+        printf("\nlogical Device creation succeed, return code: %d\n", res);
 
 	//create fence for synchronization 
 	VkFenceCreateInfo fenceCreateInfo = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -846,6 +847,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Fence creation failed, error code: %d\n", res);
 		return res;
 	}
+        printf("\nFence creation succeed, return code: %d\n", res);
 
 
 	//create a place, command buffer memory is allocated from
@@ -855,10 +857,10 @@ Example_VulkanTransposition(uint32_t deviceID,
                                     (uint32_t) vkGPU.queueFamilyIndex };
 	res = vkCreateCommandPool(vkGPU.device, &commandPoolCreateInfo, NULL, &vkGPU.commandPool);
 	if (res != VK_SUCCESS) {
-		printf("Fence creation failed, error code: %d\n", res);
+		printf("Command Pool Creation failed, error code: %d\n", res);
 		return res;
 	}
-
+	printf("\nCommand Pool Creation succeed, return code: %d\n", res);
 
 
 	//get device properties and memory properties, if needed
@@ -922,7 +924,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Input buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
-
+        printf("\nInput buffer allocation succeeds, return code: %d\n", res);
 
 
 	res = allocate_Buffer_DeviceMemory(vkGPU.physicalDevice,
@@ -937,6 +939,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Output buffer allocation failed, error code: %d\n", res);
 		return res;
 	}
+        printf("\nOutput buffer allocation succeeds, return code: %d\n", res);
 
 	//allocate input data on the CPU
 	float* buffer_input = (float*)malloc(inputBufferSize);
@@ -960,6 +963,7 @@ Example_VulkanTransposition(uint32_t deviceID,
                     &inputBuffer,
                     inputBufferSize);
 	free(buffer_input);
+        printf("\nUpload Data succeeds, return code: %d\n", res);
 
 
 	//specify pointers in the app with the previously allocated buffers data
@@ -980,6 +984,9 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
 	}
+	printf("\nApplication with no bank conflicts from transposition shader creation succeed, return code: %d\n", res);
+
+
 	//create transposition app with bank conflicts from transposition shader
 	res = createApp(&vkGPU, &app_bank_conflicts, 1);
 	if (res != VK_SUCCESS) {
@@ -1065,19 +1072,6 @@ Example_VulkanTransposition(uint32_t deviceID,
 	vkDestroyInstance(vkGPU.instance, NULL);
 	return res;
 }
-
-
-
-
-
-int findFlag(char** argv, int num, char* flag) {
-	//search for the flag in argv
-	for (int i = 0; i < num; i++) {
-		if (strstr(argv[i], flag) != NULL) return i;
-	}
-	return 0;
-}
-
 
 int main(int argc, char* argv[])
 {
