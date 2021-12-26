@@ -66,33 +66,6 @@ typedef struct {
 } VkApplication;//application specific data
 
 
-uint32_t* VkFFTReadShader(uint32_t* length, const char* filename) {
-	//function that reads shader's SPIR - V bytecode
-	FILE* fp = fopen(filename, "rb");
-	if (fp == NULL) {
-		printf("Could not find or open file: %s\n", filename);
-	}
-
-	// get file size.
-	fseek(fp, 0, SEEK_END);
-	long filesize = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-
-	long filesizepadded = ((long)ceil(filesize / 4.0)) * 4;
-
-	char* str = (char*)malloc(sizeof(char) * filesizepadded);
-	fread(str, filesize, sizeof(char), fp);
-	fclose(fp);
-
-	for (long i = filesize; i < filesizepadded; i++) {
-		str[i] = 0;
-	}
-
-	length[0] = filesizepadded;
-	return (uint32_t*)str;
-}
-
-
 
 VkResult CreateDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
 	//pointer to the function, as it is not part of the core. Function creates debugging messenger
@@ -328,38 +301,6 @@ create_logicalDevice(VkPhysicalDevice physicalDevice,
 	return res;
 }
 
-VkResult
-create_ShaderModule(VkDevice device,
-                    VkShaderModule* shaderModule,
-                    uint32_t shaderID)
-{
-	//create shader module, using the SPIR-V bytecode
-	VkResult res = VK_SUCCESS;
-	char shaderPath[256];
-	//this sample uses two compute shaders, that can be selected by passing an appropriate id
-	switch (shaderID) {
-	case 0:
-		sprintf(shaderPath, "%stransposition_no_bank_conflicts.spv", SHADER_DIR);
-		break;
-	case 1:
-		sprintf(shaderPath, "%stransposition_bank_conflicts.spv", SHADER_DIR);
-		break;
-	case 2:
-		sprintf(shaderPath, "%stransfer.spv", SHADER_DIR);
-		break;
-	default:
-		return VK_ERROR_INITIALIZATION_FAILED;
-	}
-	uint32_t shaderFilelength;
-	//read bytecode
-	uint32_t* code = VkFFTReadShader(&shaderFilelength, shaderPath);
-	VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-	shaderModuleCreateInfo.pCode = code;
-	shaderModuleCreateInfo.codeSize = shaderFilelength;
-	res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, shaderModule);
-	free(code);
-	return res;
-}
 
 
 VkResult 
@@ -504,21 +445,42 @@ create_App(VkDevice device,
                                             (const void*) NULL,
                                             (VkPipelineShaderStageCreateFlags) 0,
                                             (VkShaderStageFlagBits) VK_SHADER_STAGE_COMPUTE_BIT,
-                                            (VkShaderModule) 0,
-                                            (const char*) "main",
+                                            (VkShaderModule) NULL,
+                                            (const char*)    "main",
                                             (const VkSpecializationInfo*) &specializationInfo };
 	{
+	    //function that reads shader's SPIR - V bytecode
+	    FILE* fp = fopen( shaderFilename, "rb");
+	    if (fp == NULL) {
+	    	printf("Could not find or open file: %s\n", shaderFilename);
+	    }
+
+	    // get file size.
+	    fseek(fp, 0, SEEK_END);
+	    long filesize = ftell(fp);
+	    fseek(fp, 0, SEEK_SET);
+
+	    long filesizepadded = ((long)ceil(filesize / 4.0)) * 4;
+
+	    char* str = (char*)  malloc(sizeof(char) * filesizepadded);
+	    fread(str, filesize, sizeof(char), fp);
+	    fclose(fp);
+
+	    for (long i = filesize; i < filesizepadded; i++) {
+	    	str[i] = 0;
+	    }
+
             //create a shader module from the byte code
-	    uint32_t shaderFilelength = 0;
-	    //read bytecode
-	    uint32_t* shaderModuleCode = VkFFTReadShader(&shaderFilelength, shaderFilename);
+	    uint32_t  shaderFilelength = filesizepadded;
+            //read bytecode
+	    uint32_t* shaderModuleCode = (uint32_t*)str;
 	    VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                                          (const void*) NULL,
                                          (VkShaderModuleCreateFlags) 0,
                                          (size_t) shaderFilelength,
                                          (const uint32_t*) shaderModuleCode };
-	    res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &pipelineShaderStageCreateInfo.module);
-	    free( shaderModuleCode );
+       	    res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &pipelineShaderStageCreateInfo.module);
+       	    free( shaderModuleCode );
 	    if (res != VK_SUCCESS) return res;
 	}
 	VkComputePipelineCreateInfo computePipelineCreateInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -536,39 +498,9 @@ create_App(VkDevice device,
 	return res;
 }
 
-
-void 
-appendApp(VkGPU* vkGPU,
-          VkApplication* app,
-          VkCommandBuffer* commandBuffer)
-{
-	//this function appends to the command buffer: push constants, binds pipeline, descriptors, the shader's program dispatch call and the barrier between two compute stages to avoid race conditions 
-	VkMemoryBarrier memory_barrier = {
-				VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-				0,
-				VK_ACCESS_SHADER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-	};
-	app->pushConstants.pushID = 0;
-	//specify push constants - small amount of constant data in the shader
-	vkCmdPushConstants(commandBuffer[0], app->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VkAppPushConstantsLayout), &app->pushConstants);
-	//bind compute pipeline to the command buffer
-	vkCmdBindPipeline(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipeline);
-	//bind descriptors to the command buffer
-	vkCmdBindDescriptorSets(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipelineLayout, 0, 1, &app->descriptorSet, 0, NULL);
-	//record dispatch call to the command buffer - specifies the total amount of workgroups
-	vkCmdDispatch(commandBuffer[0], app->size[0] / app->specializationConstants.localSize[0], app->size[1] / app->specializationConstants.localSize[1], app->size[2] / app->specializationConstants.localSize[2]);
-	//memory synchronization between two compute dispatches
-	vkCmdPipelineBarrier(commandBuffer[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memory_barrier, 0, NULL, 0, NULL);
-
-}
-
-
-
 VkResult
 run_App(VkDevice device,
         VkCommandPool commandPool,
-        VkCommandBuffer* commandBuffer,
         VkPipeline       pipeline,
         VkPipelineLayout pipelineLayout,
         VkDescriptorSet* descriptorSet,
@@ -579,26 +511,26 @@ run_App(VkDevice device,
         double* time )
 {
 	VkResult res = VK_SUCCESS;
+        VkCommandBuffer commandBuffer = {0};
+
 	//create command buffer to be executed on the GPU
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                         (const void*) NULL,
                                         (VkCommandPool) commandPool,
                                         (VkCommandBufferLevel) VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                                         (uint32_t) 1 };
-	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffer);
+	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
 
 	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                                      (const void*) NULL,
                                      (VkCommandBufferUsageFlags) VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                                      (const VkCommandBufferInheritanceInfo*) NULL };
 	//begin command buffer recording
-	res = vkBeginCommandBuffer(*commandBuffer, &commandBufferBeginInfo);
+	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
 
 	if (res != VK_SUCCESS) return res;
 	//Record commands batch times. Allows to perform multiple operations in one submit to mitigate dispatch overhead
 	for (uint32_t i = 0; i < batch; i++) {
-		////appendApp(vkGPU, app, &commandBuffer);
-
 	        //this function appends to the command buffer: push constants, binds pipeline, descriptors,
                 //the shader's program dispatch call and the barrier between two compute stages to avoid race conditions 
 	        VkMemoryBarrier memoryBarrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER,
@@ -607,15 +539,15 @@ run_App(VkDevice device,
 	       	                    (VkAccessFlags) VK_ACCESS_SHADER_READ_BIT };
 	        uint32_t pushConstants_pushID = 0;
 	        //specify push constants - small amount of constant data in the shader
-	        vkCmdPushConstants(commandBuffer[0], pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &pushConstants_pushID);
+	        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &pushConstants_pushID);
 	        //bind compute pipeline to the command buffer
-	        vkCmdBindPipeline(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	        //bind descriptors to the command buffer
-	        vkCmdBindDescriptorSets(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, descriptorSet, 0, NULL);
+	        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, descriptorSet, 0, NULL);
 	        //record dispatch call to the command buffer - specifies the total amount of workgroups
-	        vkCmdDispatch(commandBuffer[0], groupCount[0], groupCount[1], groupCount[2]);
+	        vkCmdDispatch(commandBuffer, groupCount[0], groupCount[1], groupCount[2]);
 	        //memory synchronization between two compute dispatches
-	        vkCmdPipelineBarrier(commandBuffer[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memoryBarrier, 0, NULL, 0, NULL);
+	        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memoryBarrier, 0, NULL, 0, NULL);
 
 	}
 	//end command buffer recording
@@ -644,7 +576,7 @@ run_App(VkDevice device,
 	res = vkResetFences(device, 1, fence);
 	if (res != VK_SUCCESS) return res;
 	//free the command buffer
-	vkFreeCommandBuffers(device, commandPool, 1, commandBuffer);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	return res;
 }
 
@@ -1095,6 +1027,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 	//specify pointers in the app with the previously allocated buffers data
+	//copy app for bank conflicted shared memory sample and bandwidth sample
 	app.inputBufferSize         = inputBufferSize;
 	app.inputBuffer             = &inputBuffer;
 	app.inputBufferDeviceMemory = &inputBufferDeviceMemory;
@@ -1102,14 +1035,13 @@ Example_VulkanTransposition(uint32_t deviceID,
 	app.outputBuffer            = &outputBuffer;
 	app.outputBufferDeviceMemory= &outputBufferDeviceMemory;
 
-	//copy app for bank conflicted shared memory sample and bandwidth sample
-	VkApplication app_bank_conflicts = app;
-	VkApplication app_bandwidth      = app;
+	VkApplication app_bank_conflicts = app, app_bandwidth      = app;
 
         VkBuffer*    buffer[2]     = {app.inputBuffer, app.outputBuffer };
         VkDeviceSize bufferSize[2] = {app.inputBufferSize, app.outputBufferSize };
         char shaderPath[256];
 	//create transposition app with no bank conflicts from transposition shader
+        printf("\n%stransposition_no_bank_conflicts.spv\n", SHADER_DIR);
         sprintf(shaderPath, "%stransposition_no_bank_conflicts.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app.specializationConstants),                 
@@ -1182,7 +1114,6 @@ Example_VulkanTransposition(uint32_t deviceID,
                                    app.size[2] / app.specializationConstants.localSize[2] };
 	res = run_App(vkGPU.device,
                       vkGPU.commandPool,
-                      &vkGPU.commandBuffer,
                       app.pipeline,
                       app.pipelineLayout,
                       &app.descriptorSet,
@@ -1215,7 +1146,6 @@ Example_VulkanTransposition(uint32_t deviceID,
                                                   app_bank_conflicts.size[2] / app_bank_conflicts.specializationConstants.localSize[2] };
 	res = run_App(vkGPU.device,
                       vkGPU.commandPool,
-                      &vkGPU.commandBuffer,
                       app_bank_conflicts.pipeline,
                       app_bank_conflicts.pipelineLayout,
                       &app_bank_conflicts.descriptorSet,
@@ -1235,7 +1165,6 @@ Example_VulkanTransposition(uint32_t deviceID,
                                              app_bandwidth.size[2] / app_bandwidth.specializationConstants.localSize[2] };
 	res = run_App(vkGPU.device,
                       vkGPU.commandPool,
-                      &vkGPU.commandBuffer,
                       app_bandwidth.pipeline,
                       app_bandwidth.pipelineLayout,
                       &app_bandwidth.descriptorSet,
@@ -1261,7 +1190,6 @@ Example_VulkanTransposition(uint32_t deviceID,
             time_bandwidth/ time_no_bank_conflicts *100);
 
 
-
 	
 	//free resources
 	free(buffer_output);
@@ -1282,7 +1210,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 int main(int argc, char* argv[])
 {
-	uint32_t device_id = 1;      //device id used in application
+	uint32_t device_id = 0;      //device id used in application
 	uint32_t coalescedMemory = 0;//how much memory is coalesced
 	uint32_t size = 2048;
 
