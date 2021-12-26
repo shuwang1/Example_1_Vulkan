@@ -1,4 +1,4 @@
-/Users/shu/SanDisk/vulkan/Example_1_VulkanCompute_Transposition/build/CMakeFiles/rebuild_cache.dir
-/Users/shu/SanDisk/vulkan/Example_1_VulkanCompute_Transposition/build/CMakeFiles/edit_cache.dir
-/Users/shu/SanDisk/vulkan/Example_1_VulkanCompute_Transposition/build/CMakeFiles/compile_shaders.dir
-/Users/shu/SanDisk/vulkan/Example_1_VulkanCompute_Transposition/build/CMakeFiles/VulkanTransposition.dir
+/home/shu/Documents/deep/Vulkan_Example_1/build/CMakeFiles/rebuild_cache.dir
+/home/shu/Documents/deep/Vulkan_Example_1/build/CMakeFiles/edit_cache.dir
+/home/shu/Documents/deep/Vulkan_Example_1/build/CMakeFiles/compile_shaders.dir
+/home/shu/Documents/deep/Vulkan_Example_1/build/CMakeFiles/VulkanTransposition.dir

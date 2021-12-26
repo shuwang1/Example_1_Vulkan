@@ -1,6 +1,5 @@
 file(REMOVE_RECURSE
   "CMakeFiles/VulkanTransposition.dir/VulkanTransposition.c.o"
-  "CMakeFiles/VulkanTransposition.dir/VulkanTransposition.c.o.d"
   "VulkanTransposition"
   "VulkanTransposition.pdb"
 )

@@ -152,7 +152,8 @@ setup_DebugUtilsMessenger(VkInstance instance,
 }
 
 
-VkResult checkValidationLayerSupport() {
+VkResult
+check_ValidationLayer(){
 	//check if validation layers are supported when an instance is created
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, NULL);
@@ -178,7 +179,19 @@ create_Instance(VkInstance *instance)
 	VkResult res = VK_SUCCESS;
 	//check if validation layers are supported
 	if (enableValidationLayers == 1) {
-		res = checkValidationLayerSupport();
+	        uint32_t layerCount = 0;
+	        vkEnumerateInstanceLayerProperties(&layerCount, NULL);
+	        VkLayerProperties* availableLayers = (VkLayerProperties*)malloc(sizeof(VkLayerProperties) * layerCount);
+	        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
+                res = VK_ERROR_LAYER_NOT_PRESENT;
+	        for (uint32_t i = 0; i < layerCount; i++) {
+	        	if (strcmp("VK_LAYER_KHRONOS_validation", availableLayers[i].layerName) == 0) {
+	        		res = VK_SUCCESS;
+                                printf("\nfind Validation Layer\n");
+                                break;
+	        	}
+	        }
+	        free(availableLayers);
 		if (res != VK_SUCCESS) return res;
 	}
 	//sample app information
@@ -209,17 +222,16 @@ create_Instance(VkInstance *instance)
                                  (const char* const*) NULL };
 
 	//specify, whether debugging utils are required
+	const char* const extensions = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
 	if (enableValidationLayers == 1) {
-		const char* const extensions = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
 		instanceCreateInfo.enabledExtensionCount = 1;
 		instanceCreateInfo.ppEnabledExtensionNames = &extensions;
 	}
 	
-
-	if (enableValidationLayers == 1) {
+        const char* const validationLayers = { "VK_LAYER_KHRONOS_validation" };
+	if( enableValidationLayers == 1 ) {
 		//query for the validation layer support in the instance
 		instanceCreateInfo.enabledLayerCount = 1;
-		const char* validationLayers = "VK_LAYER_KHRONOS_validation";
 		instanceCreateInfo.ppEnabledLayerNames = &validationLayers;
 		instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugUtilsMessengerCreateInfo;
 	}
@@ -550,27 +562,67 @@ appendApp(VkGPU* vkGPU,
 	vkCmdPipelineBarrier(commandBuffer[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memory_barrier, 0, NULL, 0, NULL);
 
 }
-VkResult runApp(VkGPU* vkGPU, VkApplication* app, uint32_t batch, double* time) {
+
+
+
+VkResult
+run_App(VkGPU* vkGPU,
+        VkDevice device,
+        VkCommandPool commandPool,
+        VkCommandBuffer* commandBuffer,
+        VkPipelineLayout pipelineLayout,
+        VkQueue queue,
+        VkFence *fence,
+        VkApplication* app,
+        uint32_t batch,
+        double* time)
+{
 	VkResult res = VK_SUCCESS;
 	//create command buffer to be executed on the GPU
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
-	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferAllocateInfo.commandBufferCount = 1;
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                        (const void*) NULL,
+                                        (VkCommandPool) commandPool,
+                                        (VkCommandBufferLevel) VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        (uint32_t) 1 };
 	VkCommandBuffer commandBuffer = {0};
-	res = vkAllocateCommandBuffers(vkGPU->device, &commandBufferAllocateInfo, &commandBuffer);
-	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
+
+	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                     (const void*) NULL,
+                                     (VkCommandBufferUsageFlags) VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                                     (const VkCommandBufferInheritanceInfo*) NULL };
 	//begin command buffer recording
 	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+
 	if (res != VK_SUCCESS) return res;
 	//Record commands batch times. Allows to perform multiple operations in one submit to mitigate dispatch overhead
 	for (uint32_t i = 0; i < batch; i++) {
 		appendApp(vkGPU, app, &commandBuffer);
+
+	        //this function appends to the command buffer: push constants, binds pipeline, descriptors,
+                //the shader's program dispatch call and the barrier between two compute stages to avoid race conditions 
+	        VkMemoryBarrier memoryBarrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+	                            (const void*) NULL,
+	                            (VkAccessFlags) VK_ACCESS_SHADER_WRITE_BIT,
+	       	                    (VkAccessFlags) VK_ACCESS_SHADER_READ_BIT };
+	        app->pushConstants.pushID = 0;
+	        //specify push constants - small amount of constant data in the shader
+	        vkCmdPushConstants(commandBuffer[0], pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VkAppPushConstantsLayout), &app->pushConstants);
+	        //bind compute pipeline to the command buffer
+	        vkCmdBindPipeline(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipeline);
+	        //bind descriptors to the command buffer
+	        vkCmdBindDescriptorSets(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipelineLayout, 0, 1, &app->descriptorSet, 0, NULL);
+	        //record dispatch call to the command buffer - specifies the total amount of workgroups
+	        vkCmdDispatch(commandBuffer[0], app->size[0] / app->specializationConstants.localSize[0], app->size[1] / app->specializationConstants.localSize[1], app->size[2] / app->specializationConstants.localSize[2]);
+	        //memory synchronization between two compute dispatches
+	        vkCmdPipelineBarrier(commandBuffer[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memoryBarrier, 0, NULL, 0, NULL);
+
 	}
 	//end command buffer recording
 	res = vkEndCommandBuffer(commandBuffer);
 	if (res != VK_SUCCESS) return res;
+
+
 	//submit the command buffer for execution and place the fence after, measure time required for execution
 	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
 	submitInfo.commandBufferCount = 1;
@@ -1069,7 +1121,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
 	}
-	printf("\nApplication with no bank conflicts from transposition shader creation succeed, return code: %d\n", res);
+	printf("\nApplication with no bank conflicts from transposition shader creation succeeds, return code: %d\n", res);
 
 
 	//create transposition app with bank conflicts from transposition shader
@@ -1090,10 +1142,10 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
 	}
+	printf("\nApplication with bank conflicts from transposition shader creation succeeds, return code: %d\n", res);
 
 
-
-	//create bandwidth app, from the shader with only data transfers and no transosition
+	//create bandwidth app, from the shader with only data transfers and no transposition
         sprintf(shaderPath, "%stransfer.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app_bandwidth.specializationConstants),                 
@@ -1111,8 +1163,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
 	}
-
-
+	printf("\nBandwidth Application with no transposition succeeds, return code: %d\n", res);
 
 	double time_no_bank_conflicts = 0;
 	double time_bank_conflicts = 0;
@@ -1165,10 +1216,6 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 
-
-
-
-
 	
 	//free resources
 	free(buffer_output);
@@ -1189,7 +1236,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 int main(int argc, char* argv[])
 {
-	uint32_t device_id = 0;//device id used in application
+	uint32_t device_id = 1;      //device id used in application
 	uint32_t coalescedMemory = 0;//how much memory is coalesced
 	uint32_t size = 2048;
 
