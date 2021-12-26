@@ -566,16 +566,17 @@ appendApp(VkGPU* vkGPU,
 
 
 VkResult
-run_App(VkGPU* vkGPU,
-        VkDevice device,
+run_App(VkDevice device,
         VkCommandPool commandPool,
         VkCommandBuffer* commandBuffer,
+        VkPipeline       pipeline,
         VkPipelineLayout pipelineLayout,
-        VkQueue queue,
-        VkFence *fence,
-        VkApplication* app,
+        VkDescriptorSet* descriptorSet,
+        uint32_t *groupCount,
+        VkQueue  queue,
+        VkFence  *fence,
         uint32_t batch,
-        double* time)
+        double* time )
 {
 	VkResult res = VK_SUCCESS;
 	//create command buffer to be executed on the GPU
@@ -584,20 +585,19 @@ run_App(VkGPU* vkGPU,
                                         (VkCommandPool) commandPool,
                                         (VkCommandBufferLevel) VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                                         (uint32_t) 1 };
-	VkCommandBuffer commandBuffer = {0};
-	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
+	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffer);
 
 	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                                      (const void*) NULL,
                                      (VkCommandBufferUsageFlags) VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                                      (const VkCommandBufferInheritanceInfo*) NULL };
 	//begin command buffer recording
-	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+	res = vkBeginCommandBuffer(*commandBuffer, &commandBufferBeginInfo);
 
 	if (res != VK_SUCCESS) return res;
 	//Record commands batch times. Allows to perform multiple operations in one submit to mitigate dispatch overhead
 	for (uint32_t i = 0; i < batch; i++) {
-		appendApp(vkGPU, app, &commandBuffer);
+		////appendApp(vkGPU, app, &commandBuffer);
 
 	        //this function appends to the command buffer: push constants, binds pipeline, descriptors,
                 //the shader's program dispatch call and the barrier between two compute stages to avoid race conditions 
@@ -605,15 +605,15 @@ run_App(VkGPU* vkGPU,
 	                            (const void*) NULL,
 	                            (VkAccessFlags) VK_ACCESS_SHADER_WRITE_BIT,
 	       	                    (VkAccessFlags) VK_ACCESS_SHADER_READ_BIT };
-	        app->pushConstants.pushID = 0;
+	        uint32_t pushConstants_pushID = 0;
 	        //specify push constants - small amount of constant data in the shader
-	        vkCmdPushConstants(commandBuffer[0], pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VkAppPushConstantsLayout), &app->pushConstants);
+	        vkCmdPushConstants(commandBuffer[0], pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &pushConstants_pushID);
 	        //bind compute pipeline to the command buffer
-	        vkCmdBindPipeline(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipeline);
+	        vkCmdBindPipeline(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	        //bind descriptors to the command buffer
-	        vkCmdBindDescriptorSets(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, app->pipelineLayout, 0, 1, &app->descriptorSet, 0, NULL);
+	        vkCmdBindDescriptorSets(commandBuffer[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, descriptorSet, 0, NULL);
 	        //record dispatch call to the command buffer - specifies the total amount of workgroups
-	        vkCmdDispatch(commandBuffer[0], app->size[0] / app->specializationConstants.localSize[0], app->size[1] / app->specializationConstants.localSize[1], app->size[2] / app->specializationConstants.localSize[2]);
+	        vkCmdDispatch(commandBuffer[0], groupCount[0], groupCount[1], groupCount[2]);
 	        //memory synchronization between two compute dispatches
 	        vkCmdPipelineBarrier(commandBuffer[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memoryBarrier, 0, NULL, 0, NULL);
 
@@ -624,21 +624,27 @@ run_App(VkGPU* vkGPU,
 
 
 	//submit the command buffer for execution and place the fence after, measure time required for execution
-	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
+	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                         (const void*) NULL, 
+                         (uint32_t) 0,                          
+                         (const VkSemaphore*) NULL,             
+                         (const VkPipelineStageFlags*) NULL,    
+                         (uint32_t) 1,
+                         (const VkCommandBuffer*) commandBuffer,
+                         (uint32_t) 0,                          
+                         (const VkSemaphore*) NULL };
 	clock_t t;
 	t = clock();
-	res = vkQueueSubmit(vkGPU->queue, 1, &submitInfo, vkGPU->fence);
+	res = vkQueueSubmit(queue, 1, &submitInfo, *fence);
 	if (res != VK_SUCCESS) return res;
-	res = vkWaitForFences(vkGPU->device, 1, &vkGPU->fence, VK_TRUE, 100000000000);
+	res = vkWaitForFences(device, 1, fence, VK_TRUE, 100000000000);
 	if (res != VK_SUCCESS) return res;
 	t = clock() - t;
 	time[0] = ((double)t) / CLOCKS_PER_SEC * 1000/batch; //in ms
-	res = vkResetFences(vkGPU->device, 1, &vkGPU->fence);
+	res = vkResetFences(device, 1, fence);
 	if (res != VK_SUCCESS) return res;
 	//free the command buffer
-	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(device, commandPool, 1, commandBuffer);
 	return res;
 }
 
@@ -1165,12 +1171,26 @@ Example_VulkanTransposition(uint32_t deviceID,
 	}
 	printf("\nBandwidth Application with no transposition succeeds, return code: %d\n", res);
 
+
 	double time_no_bank_conflicts = 0;
 	double time_bank_conflicts = 0;
 	double time_bandwidth = 0;
 
 	//perform transposition with no bank conflicts on the input buffer and store it in the output 1000 times
-	res = runApp(&vkGPU, &app, 1000, &time_no_bank_conflicts);
+	uint32_t groupCount[3] = { app.size[0] / app.specializationConstants.localSize[0],
+                                   app.size[1] / app.specializationConstants.localSize[1],
+                                   app.size[2] / app.specializationConstants.localSize[2] };
+	res = run_App(vkGPU.device,
+                      vkGPU.commandPool,
+                      &vkGPU.commandBuffer,
+                      app.pipeline,
+                      app.pipelineLayout,
+                      &app.descriptorSet,
+                      groupCount,
+                      vkGPU.queue,
+                      &vkGPU.fence,
+                      1000,
+                      &time_no_bank_conflicts);
 	if (res != VK_SUCCESS) {
 		printf("Application 0 run failed, error code: %d\n", res);
 		return res;
@@ -1190,14 +1210,40 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("\n");
 	}*/
 	//perform transposition with bank conflicts on the input buffer and store it in the output 1000 times
-	res = runApp(&vkGPU, &app_bank_conflicts, 1000, &time_bank_conflicts);
-	if (res != VK_SUCCESS) {
+	uint32_t groupCount_bank_conflicts[3] = { app_bank_conflicts.size[0] / app_bank_conflicts.specializationConstants.localSize[0],
+                                                  app_bank_conflicts.size[1] / app_bank_conflicts.specializationConstants.localSize[1],
+                                                  app_bank_conflicts.size[2] / app_bank_conflicts.specializationConstants.localSize[2] };
+	res = run_App(vkGPU.device,
+                      vkGPU.commandPool,
+                      &vkGPU.commandBuffer,
+                      app_bank_conflicts.pipeline,
+                      app_bank_conflicts.pipelineLayout,
+                      &app_bank_conflicts.descriptorSet,
+                      groupCount_bank_conflicts,
+                      vkGPU.queue,
+                      &vkGPU.fence,
+                      1000,
+                      &time_bank_conflicts);
+        if (res != VK_SUCCESS) {
 		printf("Application 1 run failed, error code: %d\n", res);
 		return res;
 	}
 
 	//transfer data from the input buffer to the output buffer 1000 times
-	res = runApp(&vkGPU, &app_bandwidth, 1000, &time_bandwidth);
+	uint32_t groupCount_bandwidth[3] = { app_bandwidth.size[0] / app_bandwidth.specializationConstants.localSize[0],
+                                             app_bandwidth.size[1] / app_bandwidth.specializationConstants.localSize[1],
+                                             app_bandwidth.size[2] / app_bandwidth.specializationConstants.localSize[2] };
+	res = run_App(vkGPU.device,
+                      vkGPU.commandPool,
+                      &vkGPU.commandBuffer,
+                      app_bandwidth.pipeline,
+                      app_bandwidth.pipelineLayout,
+                      &app_bandwidth.descriptorSet,
+                      groupCount_bandwidth,
+                      vkGPU.queue,
+                      &vkGPU.fence,
+                      1000,
+                      &time_bandwidth);
 	if (res != VK_SUCCESS) {
 		printf("Application 2 run failed, error code: %d\n", res);
 		return res;
