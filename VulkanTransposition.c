@@ -460,7 +460,7 @@ create_App(VkDevice device,
 	res = vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, pipelineLayout);
 	if (res != VK_SUCCESS) return res;
 
-
+        {
 	        //specify specialization constants
                 //- structure that sets constants in the shader after first compilation (done by glslangvalidator, for example)
                 //  but before final shader module creation
@@ -473,18 +473,20 @@ create_App(VkDevice device,
 	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[0] = 1;
 	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[1] = size[0];
 	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[2] = size[0] * size[1];
+        }
 
-	        VkSpecializationMapEntry specializationMapEntries[6] = { 0 };
-	        for (uint32_t kk = 0; kk < 6; kk++) {
-	        	specializationMapEntries[kk].constantID = kk + 1;
-	        	specializationMapEntries[kk].size = sizeof(uint32_t);
-	        	specializationMapEntries[kk].offset = kk * sizeof(uint32_t);
-	        }
 
-	        VkSpecializationInfo specializationInfo = { (uint32_t) 6,
-                                                            (const VkSpecializationMapEntry*) specializationMapEntries,
-                                                            (size_t) 6 * sizeof(uint32_t),
-                                                            (const void*) appSpecializationConstantsLayout };
+	VkSpecializationMapEntry specializationMapEntries[6] = { 0 };
+	for (uint32_t kk = 0; kk < 6; kk++) {
+		specializationMapEntries[kk].constantID = kk + 1;
+		specializationMapEntries[kk].size = sizeof(uint32_t);
+		specializationMapEntries[kk].offset = kk * sizeof(uint32_t);
+	}
+
+	VkSpecializationInfo specializationInfo = { (uint32_t) 6,
+                                                    (const VkSpecializationMapEntry*) specializationMapEntries,
+                                                    (size_t) 6 * sizeof(uint32_t),
+                                                    (const void*) appSpecializationConstantsLayout };
 
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                             (const void*) NULL,
@@ -493,19 +495,20 @@ create_App(VkDevice device,
                                             (VkShaderModule) 0,
                                             (const char*) "main",
                                             (const VkSpecializationInfo*) &specializationInfo };
-	//create a shader module from the byte code
-	uint32_t shaderFilelength = 0;
-	//read bytecode
-	uint32_t* shaderModuleCode = VkFFTReadShader(&shaderFilelength, shaderFilename);
-	VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                                     (const void*) NULL,
-                                     (VkShaderModuleCreateFlags) 0,
-                                     (size_t) shaderFilelength,
-                                     (const uint32_t*) shaderModuleCode };
-	res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &pipelineShaderStageCreateInfo.module);
-	free( shaderModuleCode );
-	if (res != VK_SUCCESS) return res;
-	
+	{
+            //create a shader module from the byte code
+	    uint32_t shaderFilelength = 0;
+	    //read bytecode
+	    uint32_t* shaderModuleCode = VkFFTReadShader(&shaderFilelength, shaderFilename);
+	    VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                         (const void*) NULL,
+                                         (VkShaderModuleCreateFlags) 0,
+                                         (size_t) shaderFilelength,
+                                         (const uint32_t*) shaderModuleCode };
+	    res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &pipelineShaderStageCreateInfo.module);
+	    free( shaderModuleCode );
+	    if (res != VK_SUCCESS) return res;
+	}
 	VkComputePipelineCreateInfo computePipelineCreateInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
                                         (const void*) NULL,
                                         (VkPipelineCreateFlags) 0,
