@@ -317,9 +317,9 @@ create_logicalDevice(VkPhysicalDevice physicalDevice,
 }
 
 VkResult
-createShaderModule(VkDevice device,
-                   VkShaderModule* shaderModule,
-                   uint32_t shaderID)
+create_ShaderModule(VkDevice device,
+                    VkShaderModule* shaderModule,
+                    uint32_t shaderID)
 {
 	//create shader module, using the SPIR-V bytecode
 	VkResult res = VK_SUCCESS;
@@ -338,13 +338,13 @@ createShaderModule(VkDevice device,
 	default:
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
-	uint32_t filelength;
+	uint32_t shaderFilelength;
 	//read bytecode
-	uint32_t* code = VkFFTReadShader(&filelength, shaderPath);
-	VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-	createInfo.pCode = code;
-	createInfo.codeSize = filelength;
-	res = vkCreateShaderModule(device, &createInfo, NULL, shaderModule);
+	uint32_t* code = VkFFTReadShader(&shaderFilelength, shaderPath);
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+	shaderModuleCreateInfo.pCode = code;
+	shaderModuleCreateInfo.codeSize = shaderFilelength;
+	res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, shaderModule);
 	free(code);
 	return res;
 }
@@ -360,34 +360,34 @@ create_App(VkDevice device,
            VkDescriptorPool      *descriptorPool,
            VkDescriptorSetLayout *descriptorSetLayout,
            VkDescriptorSet       *descriptorSet,
+           const char* shaderFilename, 
            VkPipelineLayout *pipelineLayout,
-           VkPipeline       *pipeline,
-           uint32_t shaderID )
+           VkPipeline       *pipeline)
 {//create an application interface to Vulkan. This function binds the shader to the compute pipeline, so it can be used as a part of the command buffer later
-	VkResult res = VK_SUCCESS;
 
+        VkResult res = VK_SUCCESS;
+        uint32_t descriptorPoolSize_descriptorCount = 2;
 	//we have two storage buffer objects in one set in one pool
 	VkDescriptorPoolSize descriptorPoolSize = {(VkDescriptorType) VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                   (uint32_t) 2 };
-	const VkDescriptorType descriptorTypes[2] = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER };
+                                                   (uint32_t) descriptorPoolSize_descriptorCount };
 
+	const VkDescriptorType descriptorTypes[2] = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER };
 
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                                        (const void*) NULL,
                                        (VkDescriptorPoolCreateFlags) 0,
                                        (uint32_t) 1,
                                        (uint32_t) 1,
-                                       (const VkDescriptorPoolSize*) &descriptorPoolSize};
+                                       (const VkDescriptorPoolSize*) &descriptorPoolSize };
 
 	res = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, descriptorPool);
 	if (res != VK_SUCCESS) return res;
 
-
 	//specify each object from the set as a storage buffer
 	VkDescriptorSetLayoutBinding* descriptorSetLayoutBindings = 
-        (VkDescriptorSetLayoutBinding*) malloc(descriptorPoolSize.descriptorCount * sizeof(VkDescriptorSetLayoutBinding));
-	for (uint32_t ii = 0; ii < descriptorPoolSize.descriptorCount; ++ii) {
+                                      (VkDescriptorSetLayoutBinding*) malloc(descriptorPoolSize_descriptorCount * sizeof(VkDescriptorSetLayoutBinding));
+	for (uint32_t ii = 0; ii < descriptorPoolSize_descriptorCount; ++ii) {
 		descriptorSetLayoutBindings[ii].binding            = (uint32_t) ii;
 		descriptorSetLayoutBindings[ii].descriptorType     = (VkDescriptorType) descriptorTypes[ii];
 		descriptorSetLayoutBindings[ii].descriptorCount    = (uint32_t) 1;
@@ -398,13 +398,12 @@ create_App(VkDevice device,
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                                             (const void*) NULL,
                                             (VkDescriptorSetLayoutCreateFlags) 0,
-                                            (uint32_t) descriptorPoolSize.descriptorCount,
+                                            (uint32_t) descriptorPoolSize_descriptorCount,
                                             (const VkDescriptorSetLayoutBinding*) descriptorSetLayoutBindings};
         //create layout
 	res = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, descriptorSetLayout);
 	if (res != VK_SUCCESS) return res;
 	free(descriptorSetLayoutBindings);
-
 
 	//provide the layout with actual buffers and their sizes
 	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -415,7 +414,7 @@ create_App(VkDevice device,
 	res = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, descriptorSet);
 	if (res != VK_SUCCESS) return res;
 
-	for (uint32_t jj = 0; jj < descriptorPoolSize.descriptorCount; ++jj) {
+	for (uint32_t jj = 0; jj < descriptorPoolSize_descriptorCount; ++jj) {
 
 		VkDescriptorBufferInfo descriptorBufferInfo = { 0 };
 		if (jj == 0) {
@@ -431,7 +430,7 @@ create_App(VkDevice device,
 
 		VkWriteDescriptorSet writeDescriptorSet = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                                          (const void*) NULL,
-                                         (VkDescriptorSet) descriptorSet,
+                                         (VkDescriptorSet) *descriptorSet,
                                          (uint32_t) jj,
                                          (uint32_t) 0,
                                          (uint32_t) 1,
@@ -439,7 +438,11 @@ create_App(VkDevice device,
                                          (const VkDescriptorImageInfo*) NULL,
                                          (const VkDescriptorBufferInfo*) &descriptorBufferInfo,
                                          (const VkBufferView*) NULL };
-		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+		vkUpdateDescriptorSets((VkDevice) device,
+                                       (uint32_t) 1,
+                                       (const VkWriteDescriptorSet*) &writeDescriptorSet,
+                                       (uint32_t) 0,
+                                       (const VkCopyDescriptorSet*) NULL);
 	}
 
         //specify how many push constants can be specified when the pipeline is bound to the command buffer
@@ -458,28 +461,30 @@ create_App(VkDevice device,
 	if (res != VK_SUCCESS) return res;
 
 
-	//specify specialization constants - structure that sets constants in the shader after first compilation (done by glslangvalidator, for example) but before final shader module creation
-	//first three values - workgroup dimensions 
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[0] = coalescedMemory / sizeof(float);
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[1] = coalescedMemory / sizeof(float);
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[2] = 1;
+	        //specify specialization constants
+                //- structure that sets constants in the shader after first compilation (done by glslangvalidator, for example)
+                //  but before final shader module creation
+	        //  first three values - workgroup dimensions 
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[0] = coalescedMemory / sizeof(float);
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[1] = coalescedMemory / sizeof(float);
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->localSize[2] = 1;
 
-	//next three - buffer strides for multidimensional data
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[0] = 1;
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[1] = size[0];
-	((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[2] = size[0] * size[1];
+	        //next three - buffer strides for multidimensional data
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[0] = 1;
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[1] = size[0];
+	        ((VkAppSpecializationConstantsLayout*) appSpecializationConstantsLayout)->inputStride[2] = size[0] * size[1];
 
-	VkSpecializationMapEntry specializationMapEntries[6] = { 0 };
-	for (uint32_t i = 0; i < 6; i++) {
-		specializationMapEntries[i].constantID = i + 1;
-		specializationMapEntries[i].size = sizeof(uint32_t);
-		specializationMapEntries[i].offset = i * sizeof(uint32_t);
-	}
+	        VkSpecializationMapEntry specializationMapEntries[6] = { 0 };
+	        for (uint32_t kk = 0; kk < 6; kk++) {
+	        	specializationMapEntries[kk].constantID = kk + 1;
+	        	specializationMapEntries[kk].size = sizeof(uint32_t);
+	        	specializationMapEntries[kk].offset = kk * sizeof(uint32_t);
+	        }
 
-	VkSpecializationInfo specializationInfo = { (uint32_t) 6,
-                                                    (const VkSpecializationMapEntry*) specializationMapEntries,
-                                                    (size_t) 6 * sizeof(uint32_t),
-                                                    (const void*) appSpecializationConstantsLayout };
+	        VkSpecializationInfo specializationInfo = { (uint32_t) 6,
+                                                            (const VkSpecializationMapEntry*) specializationMapEntries,
+                                                            (size_t) 6 * sizeof(uint32_t),
+                                                            (const void*) appSpecializationConstantsLayout };
 
 	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                             (const void*) NULL,
@@ -489,9 +494,16 @@ create_App(VkDevice device,
                                             (const char*) "main",
                                             (const VkSpecializationInfo*) &specializationInfo };
 	//create a shader module from the byte code
-	res = createShaderModule(device, &pipelineShaderStageCreateInfo.module, shaderID);
-
-
+	uint32_t shaderFilelength = 0;
+	//read bytecode
+	uint32_t* shaderModuleCode = VkFFTReadShader(&shaderFilelength, shaderFilename);
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                     (const void*) NULL,
+                                     (VkShaderModuleCreateFlags) 0,
+                                     (size_t) shaderFilelength,
+                                     (const uint32_t*) shaderModuleCode };
+	res = vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &pipelineShaderStageCreateInfo.module);
+	free( shaderModuleCode );
 	if (res != VK_SUCCESS) return res;
 	
 	VkComputePipelineCreateInfo computePipelineCreateInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -1033,10 +1045,11 @@ Example_VulkanTransposition(uint32_t deviceID,
 	VkApplication app_bank_conflicts = app;
 	VkApplication app_bandwidth      = app;
 
-
-	//create transposition app with no bank conflicts from transposition shader
         VkBuffer*    buffer[2]     = {app.inputBuffer, app.outputBuffer };
         VkDeviceSize bufferSize[2] = {app.inputBufferSize, app.outputBufferSize };
+        char shaderPath[256];
+	//create transposition app with no bank conflicts from transposition shader
+        sprintf(shaderPath, "%stransposition_no_bank_conflicts.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app.specializationConstants),                 
                          app.coalescedMemory,
@@ -1046,9 +1059,9 @@ Example_VulkanTransposition(uint32_t deviceID,
                          &app.descriptorPool,
                          &app.descriptorSetLayout,
                          &app.descriptorSet,
+                         (const char*) shaderPath,
                          &app.pipelineLayout,
-                         &app.pipeline,
-                         0);
+                         &app.pipeline );
 	if (res != VK_SUCCESS) {
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
@@ -1057,6 +1070,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 	//create transposition app with bank conflicts from transposition shader
+        sprintf(shaderPath, "%stransposition_bank_conflicts.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app_bank_conflicts.specializationConstants),                 
                          app_bank_conflicts.coalescedMemory,
@@ -1066,9 +1080,9 @@ Example_VulkanTransposition(uint32_t deviceID,
                          &app_bank_conflicts.descriptorPool,
                          &app_bank_conflicts.descriptorSetLayout,
                          &app_bank_conflicts.descriptorSet,
+                         (const char*) shaderPath,
                          &app_bank_conflicts.pipelineLayout,
-                         &app_bank_conflicts.pipeline,
-                         1);
+                         &app_bank_conflicts.pipeline );
 	if (res != VK_SUCCESS) {
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
@@ -1077,6 +1091,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 	//create bandwidth app, from the shader with only data transfers and no transosition
+        sprintf(shaderPath, "%stransfer.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app_bandwidth.specializationConstants),                 
                          app_bandwidth.coalescedMemory,
@@ -1086,9 +1101,9 @@ Example_VulkanTransposition(uint32_t deviceID,
                          &app_bandwidth.descriptorPool,
                          &app_bandwidth.descriptorSetLayout,
                          &app_bandwidth.descriptorSet,
+                         (const char*) shaderPath,
                          &app_bandwidth.pipelineLayout,
-                         &app_bandwidth.pipeline,
-                         2);
+                         &app_bandwidth.pipeline );
 	if (res != VK_SUCCESS) {
 		printf("Application creation failed, error code: %d\n", res);
 		return res;
