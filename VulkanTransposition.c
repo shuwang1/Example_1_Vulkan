@@ -562,7 +562,7 @@ run_App(VkDevice device,
                          (const VkSemaphore*) NULL,             
                          (const VkPipelineStageFlags*) NULL,    
                          (uint32_t) 1,
-                         (const VkCommandBuffer*) commandBuffer,
+                         (const VkCommandBuffer*) &commandBuffer,
                          (uint32_t) 0,                          
                          (const VkSemaphore*) NULL };
 	clock_t t;
@@ -1040,6 +1040,8 @@ Example_VulkanTransposition(uint32_t deviceID,
         VkBuffer*    buffer[2]     = {app.inputBuffer, app.outputBuffer };
         VkDeviceSize bufferSize[2] = {app.inputBufferSize, app.outputBufferSize };
         char shaderPath[256];
+
+
 	//create transposition app with no bank conflicts from transposition shader
         printf("\n%stransposition_no_bank_conflicts.spv\n", SHADER_DIR);
         sprintf(shaderPath, "%stransposition_no_bank_conflicts.spv", SHADER_DIR);
@@ -1063,6 +1065,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 	//create transposition app with bank conflicts from transposition shader
+        printf("\n%stransposition_bank_conflicts.spv\n", SHADER_DIR);
         sprintf(shaderPath, "%stransposition_bank_conflicts.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app_bank_conflicts.specializationConstants),                 
@@ -1084,6 +1087,7 @@ Example_VulkanTransposition(uint32_t deviceID,
 
 
 	//create bandwidth app, from the shader with only data transfers and no transposition
+        printf("\n%stransfer.spv\n", SHADER_DIR);
         sprintf(shaderPath, "%stransfer.spv", SHADER_DIR);
         res = create_App(vkGPU.device,
                          &(app_bandwidth.specializationConstants),                 
@@ -1126,7 +1130,9 @@ Example_VulkanTransposition(uint32_t deviceID,
 		printf("Application 0 run failed, error code: %d\n", res);
 		return res;
 	}
-	float* buffer_output = (float*)malloc(outputBufferSize);
+	printf("\nRun application with no bank conflicts from transposition successfully, return code: %d\n", res);
+
+        float* buffer_output = (float*)malloc(outputBufferSize);
 
 	//Transfer data from GPU using staging buffer, if needed
 	download_Data(&vkGPU, buffer_output, &outputBuffer, outputBufferSize);

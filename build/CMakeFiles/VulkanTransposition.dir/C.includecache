@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/shu/Documents/Vulkan_Example_1/VulkanTransposition.c
+memory.h
+-
+string.h
+-
+stdio.h
+-
+stdlib.h
+-
+math.h
+-
+time.h
+-
+vulkan/vulkan.h
+/home/shu/Documents/Vulkan_Example_1/vulkan/vulkan.h
+
