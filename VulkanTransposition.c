@@ -1247,9 +1247,22 @@ Example_VulkanTransposition(uint32_t deviceID,
 	vkFreeMemory(vkGPU.device, inputBufferDeviceMemory, NULL);
 	vkDestroyBuffer(vkGPU.device, outputBuffer, NULL);
 	vkFreeMemory(vkGPU.device, outputBufferDeviceMemory, NULL);
-	deleteApp(&vkGPU, &app);
-	deleteApp(&vkGPU, &app_bank_conflicts);
-	deleteApp(&vkGPU, &app_bandwidth);
+
+	vkDestroyDescriptorPool(vkGPU.device,      app.descriptorPool,      NULL);
+	vkDestroyDescriptorSetLayout(vkGPU.device, app.descriptorSetLayout, NULL);
+	vkDestroyPipelineLayout(vkGPU.device,      app.pipelineLayout,      NULL);
+	vkDestroyPipeline(vkGPU.device,            app.pipeline,            NULL);
+
+	vkDestroyDescriptorPool(vkGPU.device,      app_bank_conflicts.descriptorPool,      NULL);
+	vkDestroyDescriptorSetLayout(vkGPU.device, app_bank_conflicts.descriptorSetLayout, NULL);
+	vkDestroyPipelineLayout(vkGPU.device,      app_bank_conflicts.pipelineLayout,      NULL);
+	vkDestroyPipeline(vkGPU.device,            app_bank_conflicts.pipeline,            NULL);
+
+	vkDestroyDescriptorPool(vkGPU.device,      app_bandwidth.descriptorPool,      NULL);
+	vkDestroyDescriptorSetLayout(vkGPU.device, app_bandwidth.descriptorSetLayout, NULL);
+	vkDestroyPipelineLayout(vkGPU.device,      app_bandwidth.pipelineLayout,      NULL);
+	vkDestroyPipeline(vkGPU.device,            app_bandwidth.pipeline,            NULL);
+
 	vkDestroyFence(vkGPU.device, vkGPU.fence, NULL);
 	vkDestroyCommandPool(vkGPU.device, vkGPU.commandPool, NULL);
 	vkDestroyDevice(vkGPU.device, NULL);
