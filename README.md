@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.com/DTolm/VulkanComputeSamples-Transposition.svg?branch=main)](https://travis-ci.com/DTolm/VulkanComputeSamples-Transposition)
-# Vulkan Compute Sample - out-of-place transposition 
+# Example 1: Vulkan Compute Sample - out-of-place transposition 
 This repository contains code samples used at EUROfusion Webinar 5. Recording of the webinar can be found at https://www.youtube.com/watch?v=YD_QO5Ilz2U
 
 ## Project goals
@@ -22,3 +22,5 @@ Initial version of Vulkan Compute transposition sample is developed by Tolmachev
 Peter Grünberg Institute and Institute for Advanced Simulation, Forschungszentrum Jülich,  D-52425 Jülich, Germany\
 E-mail 1: <d.tolmachev@fz-juelich.de>\
 E-mail 2: <dtolm96@gmail.com>
+
+Updated version by Shu Wang,  <shu@erlangnetwork.com>

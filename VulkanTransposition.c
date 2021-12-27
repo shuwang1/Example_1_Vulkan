@@ -2,7 +2,6 @@
 extern "C" {
 #endif
 
-
 #include <memory.h>
 #include <string.h>
 #include <stdio.h>
@@ -19,15 +18,19 @@ extern "C" {
 
 typedef struct {
 	VkInstance instance;//a connection between the application and the Vulkan library 
-	VkPhysicalDevice physicalDevice;//a handle for the graphics card used in the application
-	VkPhysicalDeviceProperties physicalDeviceProperties;//bastic device properties
+
+	VkPhysicalDevice                 physicalDevice;                //a handle for the graphics card used in the application
+	VkPhysicalDeviceProperties       physicalDeviceProperties;      //bastic device properties
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;//bastic memory properties of the device
+
 	VkDevice device;//a logical device, interacting with physical device
 	VkDebugUtilsMessengerEXT debugMessenger;//extension for debugging
 	uint32_t queueFamilyIndex;//if multiple queues are available, specify the used one
-	VkQueue queue;//a place, where all operations are submitted
+
+	VkQueue       queue;      //a place, where all operations are submitted
 	VkCommandPool commandPool;//an opaque objects that command buffer memory is allocated from
-	VkFence fence;//a fence used to synchronize dispatches
+	VkFence       fence;      //a fence used to synchronize dispatches
+
 	uint32_t device_id;//an id of a device, reported by Vulkan device list
 } VkGPU;//an example structure containing Vulkan primitives
 
@@ -66,8 +69,12 @@ typedef struct {
 } VkApplication;//application specific data
 
 
-
-VkResult CreateDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
+VkResult
+CreateDebugUtilsMessengerEXT(VkGPU* vkGPU,
+                             const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+                             const VkAllocationCallbacks* pAllocator,
+                             VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
 	//pointer to the function, as it is not part of the core. Function creates debugging messenger
 	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkGPU->instance, "vkCreateDebugUtilsMessengerEXT");
 	if (func != NULL) {
@@ -88,7 +95,12 @@ void DestroyDebugUtilsMessengerEXT(VkGPU* vkGPU, const VkAllocationCallbacks* pA
 }
 
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL 
+debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+              VkDebugUtilsMessageTypeFlagsEXT messageType,
+              const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+              void* pUserData)
+{
 	printf("validation layer: %s\n", pCallbackData->pMessage);
 	return VK_FALSE;
 }
@@ -96,7 +108,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 
 VkResult
 setup_DebugUtilsMessenger(VkInstance instance,
-                     VkDebugUtilsMessengerEXT *debugUtilsMessenger)
+                          VkDebugUtilsMessengerEXT *debugUtilsMessenger)
 {
 	//function that sets up the debugging messenger 
 	if (enableValidationLayers == 0) return VK_SUCCESS;
@@ -402,6 +414,7 @@ create_App(VkDevice device,
 	VkPushConstantRange pushConstantRange = { VK_SHADER_STAGE_COMPUTE_BIT,
                                 (uint32_t) 0,
                                 (uint32_t) sizeof(VkAppPushConstantsLayout) };
+
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                                        (const void*) NULL,             
                                        (VkPipelineLayoutCreateFlags) 0,
@@ -547,7 +560,16 @@ run_App(VkDevice device,
 	        //record dispatch call to the command buffer - specifies the total amount of workgroups
 	        vkCmdDispatch(commandBuffer, groupCount[0], groupCount[1], groupCount[2]);
 	        //memory synchronization between two compute dispatches
-	        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &memoryBarrier, 0, NULL, 0, NULL);
+	        vkCmdPipelineBarrier(commandBuffer,
+                                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                     0,
+                                     1,
+                                     &memoryBarrier,
+                                     0,
+                                     NULL,
+                                     0,
+                                     NULL);
 
 	}
 	//end command buffer recording
@@ -754,70 +776,84 @@ upload_Data(VkPhysicalDevice physicalDevice,
 
 
 VkResult
-download_Data(VkGPU* vkGPU,
+download_Data(VkPhysicalDevice physicalDevice,
+              VkDevice device,
+              VkCommandPool commandPool,
+              VkPhysicalDeviceMemoryProperties *physicalDeviceMemoryProperties,
+              VkQueue queue,
+              VkFence *fence,
               void* data,
               VkBuffer* buffer,
               VkDeviceSize bufferSize) 
 {
 	VkResult res = VK_SUCCESS;
+	VkCommandBuffer commandBuffer = { 0 };
 
 	//a function that transfers data from the GPU to the CPU using staging buffer, because the GPU memory is not host-coherent
 	VkDeviceSize stagingBufferSize = bufferSize;
 	VkBuffer stagingBuffer = { 0 };
 	VkDeviceMemory stagingBufferMemory = { 0 };
-	res = allocate_Buffer_DeviceMemory(vkGPU->physicalDevice,
-                                           vkGPU->device,
+	res = allocate_Buffer_DeviceMemory(physicalDevice,
+                                           device,
                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                           &vkGPU->physicalDeviceMemoryProperties,
+                                           physicalDeviceMemoryProperties,
                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                            stagingBufferSize,
                                            &stagingBuffer,
                                            &stagingBufferMemory );
 	if (res != VK_SUCCESS) return res;
 
-
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                         (const void*) NULL, 
-
-
-                                          };
-	commandBufferAllocateInfo.commandPool = vkGPU->commandPool;
-	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferAllocateInfo.commandBufferCount = 1;
-	VkCommandBuffer commandBuffer = { 0 };
-	res = vkAllocateCommandBuffers(vkGPU->device, &commandBufferAllocateInfo, &commandBuffer);
+                                        (VkCommandPool) commandPool,
+                                        (VkCommandBufferLevel) VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        (uint32_t) 1 };
+	res = vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer);
 	if (res != VK_SUCCESS) return res;
-	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                     (const void*) NULL,
+                                     (VkCommandBufferUsageFlags) VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                                     (const VkCommandBufferInheritanceInfo*) NULL };
 	res = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
 	if (res != VK_SUCCESS) return res;
-	VkBufferCopy copyRegion = { 0 };
-	copyRegion.srcOffset = 0;
-	copyRegion.dstOffset = 0;
-	copyRegion.size = stagingBufferSize;
+
+	VkBufferCopy copyRegion = { (VkDeviceSize) 0,
+                         (VkDeviceSize) 0,
+                         (VkDeviceSize) stagingBufferSize };
+
 	vkCmdCopyBuffer(commandBuffer, buffer[0], stagingBuffer, 1, &copyRegion);
 	vkEndCommandBuffer(commandBuffer);
-	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-	res = vkQueueSubmit(vkGPU->queue, 1, &submitInfo, vkGPU->fence);
-	if (res != VK_SUCCESS) return res;
-	res = vkWaitForFences(vkGPU->device, 1, &vkGPU->fence, VK_TRUE, 100000000000);
-	if (res != VK_SUCCESS) return res;
-	res = vkResetFences(vkGPU->device, 1, &vkGPU->fence);
-	if (res != VK_SUCCESS) return res;
-	vkFreeCommandBuffers(vkGPU->device, vkGPU->commandPool, 1, &commandBuffer);
 
+	VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                         (const void*) NULL, 
+                         (uint32_t) 0,
+                         (const VkSemaphore*) NULL,
+                         (const VkPipelineStageFlags*) NULL,
+                         (uint32_t) 1,
+                         (const VkCommandBuffer*) &commandBuffer,
+                         (uint32_t) 0,
+                         (const VkSemaphore*) NULL };
+	res = vkQueueSubmit(queue, 1, &submitInfo, *fence);
+	if (res != VK_SUCCESS) return res;
+
+	res = vkWaitForFences(device, 1, fence, VK_TRUE, 100000000000);
+	if (res != VK_SUCCESS) return res;
+
+	res = vkResetFences(device, 1, fence);
+	if (res != VK_SUCCESS) return res;
+
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 
 	void* stagingData;
-	res = vkMapMemory(vkGPU->device, stagingBufferMemory, 0, stagingBufferSize, 0, &stagingData);
+	res = vkMapMemory(device, stagingBufferMemory, 0, stagingBufferSize, 0, &stagingData);
 	if (res != VK_SUCCESS) return res;
+
 	memcpy(data, stagingData, stagingBufferSize);
-	vkUnmapMemory(vkGPU->device, stagingBufferMemory);
+	vkUnmapMemory(device, stagingBufferMemory);
 
-
-	vkDestroyBuffer(vkGPU->device, stagingBuffer, NULL);
-	vkFreeMemory(vkGPU->device, stagingBufferMemory, NULL);
+	vkDestroyBuffer(device, stagingBuffer, NULL);
+	vkFreeMemory(device, stagingBufferMemory, NULL);
 	return res;
 }
 
@@ -1135,7 +1171,15 @@ Example_VulkanTransposition(uint32_t deviceID,
         float* buffer_output = (float*)malloc(outputBufferSize);
 
 	//Transfer data from GPU using staging buffer, if needed
-	download_Data(&vkGPU, buffer_output, &outputBuffer, outputBufferSize);
+	download_Data(vkGPU.physicalDevice,
+                      vkGPU.device,
+                      vkGPU.commandPool,
+                      &vkGPU.physicalDeviceMemoryProperties,
+                      vkGPU.queue,
+                      &vkGPU.fence,
+                      buffer_output,
+                      &outputBuffer,
+                      outputBufferSize);
 	//Print data, if needed.
 	/*for (uint32_t k = 0; k < app.size[2]; k++) {
 		for (uint32_t j = 0; j < app.size[1]; j++) {

@@ -4,7 +4,7 @@
 # compile C with /usr/bin/cc
 C_FLAGS =  
 
-C_DEFINES = -DSHADER_DIR=\"/home/shu/Documents/Vulkan_Example_1/shaders/\"
+C_DEFINES = -DSHADER_DIR=\"/home/shu/Documents/Example_1_Vulkan/shaders/\"
 
 C_INCLUDES = 
 

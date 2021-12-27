@@ -4,13 +4,13 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_C
-  "/home/shu/Documents/Vulkan_Example_1/VulkanTransposition.c" "/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles/VulkanTransposition.dir/VulkanTransposition.c.o"
+  "/home/shu/Documents/Example_1_Vulkan/VulkanTransposition.c" "/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles/VulkanTransposition.dir/VulkanTransposition.c.o"
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 
 # Preprocessor definitions for this target.
 set(CMAKE_TARGET_DEFINITIONS_C
-  "SHADER_DIR=\"/home/shu/Documents/Vulkan_Example_1/shaders/\""
+  "SHADER_DIR=\"/home/shu/Documents/Example_1_Vulkan/shaders/\""
   )
 
 # The include file search paths:

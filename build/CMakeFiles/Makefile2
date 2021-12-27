@@ -44,10 +44,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/shu/Documents/Vulkan_Example_1
+CMAKE_SOURCE_DIR = /home/shu/Documents/Example_1_Vulkan
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/shu/Documents/Vulkan_Example_1/build
+CMAKE_BINARY_DIR = /home/shu/Documents/Example_1_Vulkan/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -75,14 +75,14 @@ clean: CMakeFiles/VulkanTransposition.dir/clean
 CMakeFiles/compile_shaders.dir/all:
 	$(MAKE) -f CMakeFiles/compile_shaders.dir/build.make CMakeFiles/compile_shaders.dir/depend
 	$(MAKE) -f CMakeFiles/compile_shaders.dir/build.make CMakeFiles/compile_shaders.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles --progress-num=3,4,5 "Built target compile_shaders"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles --progress-num=3,4,5 "Built target compile_shaders"
 .PHONY : CMakeFiles/compile_shaders.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/compile_shaders.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Vulkan_Example_1/build/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Example_1_Vulkan/build/CMakeFiles 3
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/compile_shaders.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Vulkan_Example_1/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Example_1_Vulkan/build/CMakeFiles 0
 .PHONY : CMakeFiles/compile_shaders.dir/rule
 
 # Convenience name for target.
@@ -102,14 +102,14 @@ CMakeFiles/compile_shaders.dir/clean:
 CMakeFiles/VulkanTransposition.dir/all: CMakeFiles/compile_shaders.dir/all
 	$(MAKE) -f CMakeFiles/VulkanTransposition.dir/build.make CMakeFiles/VulkanTransposition.dir/depend
 	$(MAKE) -f CMakeFiles/VulkanTransposition.dir/build.make CMakeFiles/VulkanTransposition.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles --progress-num=1,2 "Built target VulkanTransposition"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles --progress-num=1,2 "Built target VulkanTransposition"
 .PHONY : CMakeFiles/VulkanTransposition.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/VulkanTransposition.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Vulkan_Example_1/build/CMakeFiles 5
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Example_1_Vulkan/build/CMakeFiles 5
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/VulkanTransposition.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Vulkan_Example_1/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/shu/Documents/Example_1_Vulkan/build/CMakeFiles 0
 .PHONY : CMakeFiles/VulkanTransposition.dir/rule
 
 # Convenience name for target.

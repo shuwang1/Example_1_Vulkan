@@ -43,10 +43,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/shu/Documents/Vulkan_Example_1
+CMAKE_SOURCE_DIR = /home/shu/Documents/Example_1_Vulkan
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/shu/Documents/Vulkan_Example_1/build
+CMAKE_BINARY_DIR = /home/shu/Documents/Example_1_Vulkan/build
 
 # Utility rule file for compile_shaders.
 
@@ -59,16 +59,16 @@ CMakeFiles/compile_shaders: ../shaders/transposition_no_bank_conflicts.spv
 
 
 ../shaders/transfer.spv: ../shaders/transfer.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating ../shaders/transfer.spv"
-	/usr/bin/glslangValidator -V /home/shu/Documents/Vulkan_Example_1/shaders/transfer.comp -o /home/shu/Documents/Vulkan_Example_1/shaders/transfer.spv
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating ../shaders/transfer.spv"
+	/usr/bin/glslangValidator -V /home/shu/Documents/Example_1_Vulkan/shaders/transfer.comp -o /home/shu/Documents/Example_1_Vulkan/shaders/transfer.spv
 
 ../shaders/transposition_bank_conflicts.spv: ../shaders/transposition_bank_conflicts.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating ../shaders/transposition_bank_conflicts.spv"
-	/usr/bin/glslangValidator -V /home/shu/Documents/Vulkan_Example_1/shaders/transposition_bank_conflicts.comp -o /home/shu/Documents/Vulkan_Example_1/shaders/transposition_bank_conflicts.spv
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating ../shaders/transposition_bank_conflicts.spv"
+	/usr/bin/glslangValidator -V /home/shu/Documents/Example_1_Vulkan/shaders/transposition_bank_conflicts.comp -o /home/shu/Documents/Example_1_Vulkan/shaders/transposition_bank_conflicts.spv
 
 ../shaders/transposition_no_bank_conflicts.spv: ../shaders/transposition_no_bank_conflicts.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Vulkan_Example_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Generating ../shaders/transposition_no_bank_conflicts.spv"
-	/usr/bin/glslangValidator -V /home/shu/Documents/Vulkan_Example_1/shaders/transposition_no_bank_conflicts.comp -o /home/shu/Documents/Vulkan_Example_1/shaders/transposition_no_bank_conflicts.spv
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/shu/Documents/Example_1_Vulkan/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Generating ../shaders/transposition_no_bank_conflicts.spv"
+	/usr/bin/glslangValidator -V /home/shu/Documents/Example_1_Vulkan/shaders/transposition_no_bank_conflicts.comp -o /home/shu/Documents/Example_1_Vulkan/shaders/transposition_no_bank_conflicts.spv
 
 compile_shaders: CMakeFiles/compile_shaders
 compile_shaders: ../shaders/transfer.spv
@@ -88,6 +88,6 @@ CMakeFiles/compile_shaders.dir/clean:
 .PHONY : CMakeFiles/compile_shaders.dir/clean
 
 CMakeFiles/compile_shaders.dir/depend:
-	cd /home/shu/Documents/Vulkan_Example_1/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/shu/Documents/Vulkan_Example_1 /home/shu/Documents/Vulkan_Example_1 /home/shu/Documents/Vulkan_Example_1/build /home/shu/Documents/Vulkan_Example_1/build /home/shu/Documents/Vulkan_Example_1/build/CMakeFiles/compile_shaders.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/shu/Documents/Example_1_Vulkan/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/shu/Documents/Example_1_Vulkan /home/shu/Documents/Example_1_Vulkan /home/shu/Documents/Example_1_Vulkan/build /home/shu/Documents/Example_1_Vulkan/build /home/shu/Documents/Example_1_Vulkan/build/CMakeFiles/compile_shaders.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/compile_shaders.dir/depend
 

@@ -1,4 +1,4 @@
-# Install script for directory: /home/shu/Documents/Vulkan_Example_1
+# Install script for directory: /home/shu/Documents/Example_1_Vulkan
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/shu/Documents/Vulkan_Example_1/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/shu/Documents/Example_1_Vulkan/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
